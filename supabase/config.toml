@@ -1,0 +1,17 @@
+# Supabase CLI / GitHub-integratie configuratie.
+#
+# De koppeling tussen deze repo en je Supabase-project stel je in het Supabase
+# dashboard in. Dit bestand is bewust minimaal gehouden: alles in
+# supabase/migrations/ wordt standaard al opgepakt, dus hier staat alleen wat
+# echt afwijkt van de standaard.
+
+# Lokale identifier, gebruikt door `supabase start` voor containernamen.
+# Dit is NIET je project-ref.
+project_id = "mcs_dashboard"
+
+[functions.ttn-webhook]
+# TTN kan geen Supabase-JWT meesturen. De beveiliging is de x-webhook-token
+# header die de function zelf controleert. Dit is het equivalent van de
+# --no-verify-jwt vlag bij handmatig uitrollen, maar dan voor de automatische
+# deploy via de GitHub-integratie.
+verify_jwt = false

@@ -36,9 +36,15 @@ gateway-tokens en session key ids. Er staat bewust geen RLS select-policy op en
 `anon` heeft er geen grants op. Niet "even" openzetten voor het dashboard —
 gebruik `readings`, `latest_readings`, `device_status` of `device_metrics`.
 
-**`schema.sql` is idempotent** en is de enige bron van waarheid voor het
-databaseschema. Wijzigingen daarin aanbrengen en opnieuw draaien, niet
-handmatig in Studio klikken.
+**Migraties zijn de bron van waarheid** voor het databaseschema, niet de
+Supabase Studio UI. Deze repo is via de GitHub-integratie aan het
+Supabase-project gekoppeld: bij een push op de gekoppelde branch draait
+Supabase de migraties en rolt het de Edge Functions uit.
+
+Een schemawijziging is dus **een nieuw bestand** in `supabase/migrations/`, met
+een nieuwere timestamp — nooit een bestaande migratie aanpassen die al is
+toegepast. De initiële migratie is idempotent geschreven, maar ga daar bij
+nieuwe migraties niet van uit.
 
 ## Sleutels
 
@@ -50,14 +56,15 @@ handmatig in Studio klikken.
 | `anon` key | `dashboard/config.js` | ja, bedoeld |
 
 De anon key hoort publiek in de browser te staan. De bescherming zijn de RLS
-policies onderaan `schema.sql`: `anon` mag alleen `SELECT` op `devices` en
+policies onderaan de initiële migratie: `anon` mag alleen `SELECT` op `devices` en
 `readings`. Als iets niet werkt met de anon key, is het antwoord bijna nooit
 "meer rechten geven" maar "via een view of RPC ontsluiten".
 
 ## Bestanden
 
 ```
-supabase/schema.sql                 tabellen, RLS, views, ingest-functies
+supabase/config.toml                CLI/GitHub-integratie, zet verify_jwt uit
+supabase/migrations/                tabellen, RLS, views, ingest-functies
 supabase/functions/ttn-webhook/     Deno edge function, verwacht x-webhook-token
 scripts/backfill.mjs                TTN console-exports inladen, geen deps
 dashboard/                          wat GitHub Pages serveert
@@ -80,8 +87,14 @@ Lokaal: `cd dashboard && python3 -m http.server 8000`.
 
 ## Commando's
 
+Normaal gesproken hoef je niets handmatig uit te rollen: pushen naar de
+gekoppelde branch is genoeg. Handmatig kan wel:
+
 ```bash
-# edge function uitrollen (--no-verify-jwt is verplicht: TTN stuurt geen JWT)
+# migraties toepassen
+supabase db push
+
+# edge function uitrollen (buiten de GitHub-integratie om)
 supabase functions deploy ttn-webhook --no-verify-jwt
 
 # oude exports inladen
@@ -90,11 +103,13 @@ SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/backfill.mjs data/*.
 
 ## Valkuilen
 
-- Vergeten `--no-verify-jwt` → TTN krijgt 401 van Supabase zelf, niet van de function.
+- TTN krijgt 401 van Supabase zelf (niet van de function) → `verify_jwt` staat
+  aan. Via de GitHub-integratie regelt `[functions.ttn-webhook]` in
+  `config.toml` dat; bij handmatig uitrollen heb je `--no-verify-jwt` nodig.
 - Pad-veld ingevuld in de TTN webhook → 404. Base URL moet het volledige
   function-pad zijn, pad leeg laten.
-- `permission denied for table readings` → de grants staan onderaan
-  `schema.sql`; die is niet helemaal gedraaid.
+- `permission denied for table readings` → de grants staan onderaan de
+  initiële migratie; die is niet (helemaal) toegepast.
 - Status blijft "polling" in plaats van "live" → Realtime staat uit voor
   `readings`.
 

@@ -39,8 +39,13 @@ heeft bewust géén policy en is dus onbereikbaar met die key.
 
 ## 1. Database opzetten
 
-Supabase Studio → **SQL Editor** → New query → plak `supabase/schema.sql` →
-Run. Het script is idempotent, dus opnieuw draaien kan altijd.
+Deze repo is via de GitHub-integratie aan het Supabase-project gekoppeld, dus
+bij een push op de gekoppelde branch draait Supabase de migraties in
+`supabase/migrations/` zelf. De initiële migratie is idempotent, dus het maakt
+niet uit of je het schema eerder al handmatig hebt gedraaid.
+
+Liever handmatig? Plak `supabase/migrations/20261106120000_init.sql` in
+Supabase Studio → SQL Editor → Run, of draai `supabase db push`.
 
 Wat je krijgt:
 
@@ -78,20 +83,26 @@ Zonder label toont het dashboard het kale `device_id`.
 
 ## 2. Edge Function uitrollen
 
+De GitHub-integratie rolt de function bij elke push uit, en
+`[functions.ttn-webhook] verify_jwt = false` in `supabase/config.toml` zorgt
+dat Supabase geen JWT eist — TTN kan er namelijk geen meesturen. De beveiliging
+is de `X-Webhook-Token` header uit de volgende stap.
+
+Het secret moet je wél één keer zelf zetten, want dat hoort niet in de repo:
+
 ```bash
-npm install -g supabase          # of: brew install supabase/tap/supabase
+openssl rand -hex 32                      # verzin er een en bewaar hem
+
+npm install -g supabase
 supabase login
 supabase link --project-ref JOUW-PROJECT-REF
-
-# verzin een lang random secret en bewaar het even
-openssl rand -hex 32
-
 supabase secrets set TTN_WEBHOOK_SECRET=<dat-secret>
-supabase functions deploy ttn-webhook --no-verify-jwt
 ```
 
-`--no-verify-jwt` is nodig: TTN kan geen Supabase-JWT meesturen. De beveiliging
-zit in de `X-Webhook-Token` header die je in de volgende stap instelt.
+Kan ook zonder CLI: Supabase dashboard → Edge Functions → Secrets.
+
+Buiten de GitHub-integratie om uitrollen kan met
+`supabase functions deploy ttn-webhook --no-verify-jwt`.
 
 Je endpoint is nu:
 
@@ -202,7 +213,8 @@ naam. Wil je er een met eenheid en drempelwaarde bij? Voeg een regel toe aan
 ## Mappenstructuur
 
 ```
-supabase/schema.sql                    alles in één keer te draaien
+supabase/config.toml                   CLI/GitHub-integratie
+supabase/migrations/                   schema, RLS, views, ingest-functies
 supabase/functions/ttn-webhook/        de Edge Function
 scripts/backfill.mjs                   oude exports inladen
 dashboard/                             wat op GitHub Pages komt
@@ -217,10 +229,10 @@ data/                                  jouw TTN exports (niet gecommit)
 |---|---|
 | TTN toont `401` | `x-webhook-token` komt niet overeen met `TTN_WEBHOOK_SECRET` |
 | TTN toont `404` | pad-veld ingevuld in TTN, of function niet uitgerold |
-| TTN toont `401` van Supabase zelf | vergeten `--no-verify-jwt` bij deploy |
+| TTN toont `401` van Supabase zelf | `verify_jwt` staat aan — check `[functions.ttn-webhook]` in `config.toml` |
 | Dashboard zegt "niet geconfigureerd" | `config.js` staat nog op de placeholder |
 | Dashboard leeg, geen fout | database is leeg — draai de backfill of wacht op een uplink |
-| `permission denied for table readings` | `schema.sql` niet (helemaal) gedraaid; de grants staan onderaan |
+| `permission denied for table readings` | migratie niet (helemaal) toegepast; de grants staan onderaan |
 | Status blijft "polling" | Realtime staat uit; zet in Supabase Studio Realtime aan voor `readings` |
 
 ## Getest
