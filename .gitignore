@@ -1,0 +1,16 @@
+# Nooit committen
+.env
+.env.*
+*.key
+service-role*
+
+# Supabase CLI
+.supabase/
+supabase/.temp/
+
+# TTN exports kunnen groot zijn — zet ze hier neer en houd ze lokaal
+data/*.json
+!data/.gitkeep
+
+node_modules/
+.DS_Store
