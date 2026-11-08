@@ -4,7 +4,7 @@
 //  dit bestand is een ES module die de browser rechtstreeks uitvoert.
 // =====================================================================
 
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm";
 
 const cfg = window.GACS_CONFIG ?? {};
 

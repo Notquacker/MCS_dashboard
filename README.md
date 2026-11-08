@@ -4,6 +4,9 @@ Pipeline voor het werkplaatsproject bij MCS: LoRaWAN-sensoren sturen via The
 Things Network naar Supabase, en een statisch dashboard op GitHub Pages leest
 die data read-only terug.
 
+**🔗 Live dashboard:** <https://notquacker.github.io/MCS_dashboard/>
+— hier kunnen medestudenten de sensordata bekijken, geen login nodig.
+
 ```
 ELSYS ERS-CO2  ─┐
 ELSYS EYE      ─┼─ LoRaWAN ─→ TTN ─(webhook)─→ Supabase Edge Function
@@ -178,11 +181,20 @@ keer draaien levert geen dubbele rijen op.
 
 1. Vul `dashboard/config.js` in met je project-URL en **anon** key.
 2. Push naar `main`.
-3. GitHub → Settings → Pages → Source: **GitHub Actions**.
+3. GitHub → Settings → Pages → Source: **GitHub Actions** (eenmalig).
 
 De workflow in `.github/workflows/deploy-pages.yml` publiceert de map
 `dashboard/` bij elke push die daaraan raakt. Geen build step, geen
 `node_modules` — Chart.js, Luxon en supabase-js komen van een CDN.
+
+Na de eerste geslaagde deploy staat het dashboard op:
+
+```
+https://notquacker.github.io/MCS_dashboard/
+```
+
+Die link kun je delen met medestudenten; ze hebben geen account nodig. De anon
+key in `config.js` mag publiek zijn — de RLS laat alleen lezen toe.
 
 Lokaal bekijken kan met elke statische server:
 
