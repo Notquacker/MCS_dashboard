@@ -7,6 +7,8 @@
 //  --no-verify-jwt is nodig: TTN kan geen Supabase JWT meesturen.
 //  De beveiliging zit in de X-Webhook-Token header die je in TTN instelt.
 //
+//  Deploy loopt via de GitHub-integratie (config.toml zet verify_jwt uit).
+//
 //  Secrets (supabase secrets set ...):
 //    TTN_WEBHOOK_SECRET   zelfgekozen lange random string
 //  SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY zet het platform zelf klaar.
