@@ -6,6 +6,10 @@
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm";
 
+// DOM-helper bovenaan: showError/setStatus in de config-check hieronder
+// gebruiken 'm al, dus hij moet eerder bestaan dan die check.
+const $ = (sel) => document.querySelector(sel);
+
 const cfg = window.GACS_CONFIG ?? {};
 
 if (!cfg.supabaseUrl || cfg.supabaseUrl.includes("JOUW-PROJECT-REF")) {
@@ -69,7 +73,6 @@ const state = {
   chart: null,
 };
 
-const $ = (sel) => document.querySelector(sel);
 
 const fmtTime = new Intl.DateTimeFormat("nl-NL", {
   hour: "2-digit", minute: "2-digit",
