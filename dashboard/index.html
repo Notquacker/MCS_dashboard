@@ -135,11 +135,6 @@
         <button class="knop" id="toepassen">Toepassen</button>
       </span>
       <span class="rechts">
-        <span class="kop" style="width:auto">Weergave</span>
-        <div class="groep" id="weergaven">
-          <button data-w="meting">Per meting</button>
-          <button data-w="apparaat">Per apparaat</button>
-        </div>
         <button class="knop" id="csv" title="Data van de huidige selectie downloaden">CSV</button>
       </span>
     </div>
@@ -149,9 +144,8 @@
       <button class="link" data-alles="apparaten">alles</button><button class="link" data-geen="apparaten">geen</button>
     </div>
     <div class="regel">
-      <span class="kop">Metingen</span>
+      <span class="kop">Grafiek</span>
       <span id="chips-velden" style="display:contents"></span>
-      <button class="link" data-alles="velden">alles</button><button class="link" data-geen="velden">geen</button>
     </div>
   </div>
 
@@ -265,9 +259,10 @@ const opgeslagen = (() => { try { return JSON.parse(localStorage.getItem("mcs-da
 const st = {
   uren: opgeslagen.uren ?? 24,             // getal of "eigen"
   van: opgeslagen.van ?? null, tot: opgeslagen.tot ?? null,
-  weergave: opgeslagen.weergave || "meting",
+  weergave: "meting",                      // altijd één gecombineerde grafiek
   apparaten: new Set((opgeslagen.apparaten || APPARATEN.map(a => a.id)).filter(id => !VERBORGEN.includes(id))),
-  velden: new Set(opgeslagen.velden || STANDAARD_VELDEN),
+  // Eén metric tegelijk in de grafiek; knoppen wisselen 'm, zoals de eerste versie.
+  velden: new Set([(opgeslagen.velden && opgeslagen.velden[0]) || (window.GACS_CONFIG || {}).defaultMetric || "co2"]),
 };
 function bewaar() {
   try { localStorage.setItem("mcs-dashboard", JSON.stringify({ ...st, apparaten: [...st.apparaten], velden: [...st.velden] })); } catch {}
@@ -281,7 +276,6 @@ let beschikbaar = new Set(); // velden die in de data voorkomen
 function tekenBediening() {
   document.querySelectorAll("#periodes button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.uren) === String(st.uren)));
   $("eigen").classList.toggle("aan", st.uren === "eigen");
-  document.querySelectorAll("#weergaven button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === st.weergave));
 
   $("chips-apparaten").innerHTML = bekendeIds.map(id => `
     <button class="chip" data-apparaat="${id}" aria-pressed="${st.apparaten.has(id)}">
@@ -309,23 +303,18 @@ document.addEventListener("click", e => {
     const v = new Date($("van").value).getTime(), w = new Date($("tot").value).getTime();
     if (!(v < w)) { $("van").focus(); return; }
     st.van = v; st.tot = w;
-  } else if (t.dataset.w) {
-    st.weergave = t.dataset.w;
   } else if (t.dataset.apparaat) {
     const id = t.dataset.apparaat; st.apparaten.has(id) ? st.apparaten.delete(id) : st.apparaten.add(id);
   } else if (t.dataset.veld) {
-    const v = t.dataset.veld; st.velden.has(v) ? st.velden.delete(v) : st.velden.add(v);
-  } else if (t.dataset.alles) {
-    if (t.dataset.alles === "apparaten") st.apparaten = new Set(bekendeIds);
-    else st.velden = new Set([...beschikbaar]);
-  } else if (t.dataset.geen) {
-    if (t.dataset.geen === "apparaten") st.apparaten.clear(); else st.velden.clear();
+    // Eén metric tegelijk in de gecombineerde grafiek
+    st.velden = new Set([t.dataset.veld]);
+  } else if (t.dataset.alles === "apparaten") {
+    st.apparaten = new Set(bekendeIds);
+  } else if (t.dataset.geen === "apparaten") {
+    st.apparaten.clear();
   } else if (t.classList.contains("kaart")) {
-    // Klik op een kaart: alleen dit apparaat, met al zijn metingen
-    const id = t.dataset.id;
-    st.apparaten = new Set([id]); st.weergave = "apparaat";
-    st.velden = new Set(Object.keys((laatste[id] || {}).waarden || {}).filter(v => v !== "rssi"));
-    if (!st.velden.size) st.velden = new Set(STANDAARD_VELDEN);
+    // Klik op een kaart: toon alleen deze sensor in de grafiek
+    st.apparaten = new Set([t.dataset.id]);
     window.scrollTo({ top: $("grafieken").offsetTop - 12, behavior: "smooth" });
   } else if (t.id === "csv") {
     return downloadCsv();
@@ -334,19 +323,23 @@ document.addEventListener("click", e => {
 });
 
 // ============================================================ kaarten
+function statusLabel(online) {
+  const k = online ? "--goed" : "--slecht";
+  return `<span class="label"><i style="background:var(${k})"></i>${online ? "online" : "offline"}</span>`;
+}
 function tekenKaarten() {
   $("kaarten").innerHTML = bekendeIds.map(id => {
     const a = info(id), d = laatste[id], w = d ? d.waarden : {};
     const val = k => w[k] ? w[k].waarde : null;
-    const oud = !d || Date.now() - d.laatst_gezien > VERLOPEN_MIN * 60000;
+    const offline = !d || d.online === false;
     const co2 = val("co2");
-    return `<div class="kaart${oud ? " oud" : ""}${st.apparaten.has(id) ? "" : " uit"}" data-id="${id}" title="Klik: alleen dit apparaat bekijken">
-      <div class="naam"><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}</div>
+    return `<div class="kaart${offline ? " oud" : ""}${st.apparaten.has(id) ? "" : " uit"}" data-id="${id}" title="Klik: alleen deze sensor in de grafiek">
+      <div class="naam"><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}${d ? statusLabel(!offline) : ""}</div>
       <div class="soort">${a.soort}</div>
       <div class="temp">${fmt(val("temperature"))}<small> °C</small></div>
       <div class="rij"><span>Vochtigheid</span><b>${fmt(val("humidity"), 0)} %</b></div>
       ${co2 != null ? `<div class="rij"><span>CO₂</span><span><b>${fmt(co2, 0)}</b>${co2Label(co2)}</span></div>` : ""}
-      <div class="tijd">${d ? (oud ? "Geen data sinds " : "") + geleden(d.laatst_gezien) : "Nog geen data"}</div>
+      <div class="tijd">${d ? (offline ? "Laatste contact " : "") + geleden(d.laatst_gezien) : "Nog geen data"}</div>
     </div>`;
   }).join("");
 }
