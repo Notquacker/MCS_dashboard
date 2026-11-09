@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MCS binnenklimaat</title>
+<title>MCS Climet Dashboard</title>
 <link rel="icon" type="image/png" href="mcs-logo.png">
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -110,6 +110,25 @@
   .melding { background: var(--vlak); border: 1px solid var(--rand); border-left: 3px solid var(--slecht);
              border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: none; color: var(--tekst-2); }
   footer { color: var(--tekst-3); font-size: 12px; margin-top: 16px; }
+
+  /* ---- mobiel (telefoon) */
+  @media (max-width: 560px) {
+    .wrap { padding: 16px 14px 32px; }
+    h1 { font-size: 18px; }
+    .logo { height: 40px; width: 40px; }
+    .sub { font-size: 12px; }
+    .merk { gap: 10px; }
+    /* Elk bedieningslabel op een eigen regel, de controls eronder op volle breedte */
+    .regel > .kop { width: 100%; margin-bottom: -2px; }
+    /* Periode-knoppen: compact, en de balk mag afbreken naar een tweede rij
+       zodat 'Eigen…' niet buiten beeld valt */
+    .groep { flex-wrap: wrap; }
+    .groep button { padding: 6px 10px; white-space: nowrap; }
+    /* CSV niet helemaal rechts laten zweven */
+    .rechts { margin-left: 0; }
+    /* Iets lagere grafieken = minder scrollen */
+    .canvas { height: 230px; }
+  }
 </style>
 </head>
 <body>
@@ -118,8 +137,8 @@
     <div class="merk">
       <img class="logo" src="mcs-logo.png" alt="MCS" width="46" height="46">
       <div>
-        <h1>MCS binnenklimaat</h1>
-        <div class="sub">Live sensordata uit The Things Network · app mcs-elsys</div>
+        <h1>MCS Climet Dashboard</h1>
+        <div class="sub">Live Sensordata. Made by HR Students</div>
       </div>
     </div>
     <div class="status"><span class="stip" id="stip"></span><span id="statustekst">Laden…</span></div>
