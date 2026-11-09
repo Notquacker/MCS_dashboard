@@ -20,5 +20,5 @@ window.GACS_CONFIG = {
   tileMetrics: ["co2", "temperature", "humidity", "light", "motion", "occupancy"],
 
   // Standaard geselecteerde grafiek-metric bij het openen.
-  defaultMetric: "co2",
+  defaultMetric: "temperature",
 };
