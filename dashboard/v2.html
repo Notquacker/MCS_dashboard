@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCS Climate Control</title>
+<link rel="icon" type="image/png" href="mcs-logo.png">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  :root{
+    --bg:#0e131f; --bg2:#0b0f18;
+    --panel:#161d2b; --panel2:#1d2636; --inner:#212b3d;
+    --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+    --txt:#eef2f8; --txt2:#9aa6bd; --txt3:#657089;
+    --accent:#2dd4bf; --accent2:#38bdf8;
+    --cold:#38bdf8; --cool:#2dd4bf; --ok:#22c55e; --warm:#f59e0b; --hot:#ef4444;
+    --goed:#22c55e; --slecht:#ef4444;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:radial-gradient(1200px 700px at 70% -10%, #1a2740 0%, var(--bg) 55%, var(--bg2) 100%); color:var(--txt);
+       font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; min-height:100vh;}
+  .wrap{max-width:1500px; margin:0 auto; padding:18px 20px 40px;}
+  button{font:inherit; color:inherit; cursor:pointer;}
+  .mut{color:var(--txt2);} .mut3{color:var(--txt3);}
+
+  /* topbar */
+  .top{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:20px;}
+  .brand{display:flex; align-items:center; gap:11px;}
+  .brand img{height:38px; width:38px;}
+  .brand b{font-size:16px; font-weight:700; letter-spacing:.2px;}
+  .tabs{display:flex; gap:4px; margin-left:8px;}
+  .tabs button{background:none; border:0; color:var(--txt2); padding:7px 13px; border-radius:9px; font-size:13.5px;}
+  .tabs button.on{background:var(--panel2); color:var(--txt); font-weight:600;}
+  .tabs button:hover{color:var(--txt);}
+  .top .rechts{margin-left:auto; display:flex; align-items:center; gap:10px;}
+  .chip{display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:9px 15px;}
+  .chip .v{font-size:16px; font-weight:700;} .chip .k{font-size:11px; color:var(--txt3);}
+  .live{display:flex; align-items:center; gap:7px; color:var(--txt2); font-size:12.5px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 13px;}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--txt3);}
+  .dot.on{background:var(--goed); box-shadow:0 0 0 3px rgba(34,197,94,.18);}
+  .dot.err{background:var(--slecht);}
+
+  /* layout */
+  .grid{display:grid; grid-template-columns:1fr 360px; gap:16px; align-items:start;}
+  .col{display:grid; gap:16px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px 18px;}
+  .card h3{margin:0; font-size:13px; font-weight:650; letter-spacing:.2px;}
+  .card .hd{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+  .card .hd a{color:var(--txt3); font-size:12px; text-decoration:none;} .card .hd a:hover{color:var(--txt2);}
+
+  .hero h1{margin:2px 0 4px; font-size:26px; font-weight:750; letter-spacing:-.4px;}
+  .hero p{margin:0; color:var(--txt2); font-size:13.5px;}
+
+  /* kpi */
+  .kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:13px 15px; display:flex; gap:12px; align-items:flex-start;}
+  .kpi .ico{width:40px; height:40px; border-radius:11px; display:grid; place-items:center; font-size:19px; flex:none;}
+  .kpi .big{font-size:23px; font-weight:750; letter-spacing:-.3px; line-height:1.1;}
+  .kpi .lbl{color:var(--txt2); font-size:12px;} .kpi .sub{color:var(--txt3); font-size:11.5px; margin-top:2px;}
+  .tag{font-size:11px; font-weight:650; padding:2px 7px; border-radius:7px;}
+  .tag.g{background:rgba(34,197,94,.15); color:#4ade80;} .tag.r{background:rgba(239,68,68,.15); color:#f87171;}
+
+  /* plattegrond */
+  .plat{position:relative; padding:14px;}
+  .plat svg{display:block; width:100%; height:auto;}
+  .zroom{cursor:pointer; transition:.15s;}
+  .zroom:hover .rm{stroke:var(--line2);}
+  .rm{fill:var(--inner); stroke:var(--line); stroke-width:1.5; rx:12;}
+  .zname{fill:var(--txt2); font-size:12px; font-weight:600;}
+  .zpill{fill:rgba(10,14,22,.78); stroke:var(--line2); stroke-width:1;}
+  .ztemp{fill:var(--txt); font-size:15px; font-weight:750;}
+  .zdot{}
+  .duct{fill:none; stroke:var(--accent2); stroke-width:2.5; opacity:.55; stroke-linecap:round; filter:url(#glow);}
+  .legenda{display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; color:var(--txt3); font-size:11.5px;}
+  .legenda span{display:inline-flex; align-items:center; gap:5px;}
+  .legenda i{width:9px; height:9px; border-radius:3px; display:inline-block;}
+
+  /* zone detail */
+  .zdetail{display:grid; grid-template-columns:auto repeat(4,1fr); gap:12px; align-items:center;}
+  .zdetail .naam{display:flex; align-items:center; gap:9px; min-width:150px;}
+  .zdetail .naam b{font-size:15px;} .zdetail .naam .s{color:var(--txt3); font-size:12px;}
+  .metric{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:11px 13px;}
+  .metric .m{font-size:19px; font-weight:750;} .metric .ml{color:var(--txt3); font-size:11.5px;}
+
+  /* ring */
+  .ring{display:flex; align-items:center; gap:16px;}
+  .ring svg{flex:none;}
+  .ring .mid{font-size:22px; font-weight:800;} .ring .ml{font-size:10.5px; fill:var(--txt3);}
+  .breakdown{display:grid; gap:9px; flex:1;}
+  .brow{display:flex; align-items:center; gap:8px; font-size:12.5px;}
+  .brow .nm{color:var(--txt2);} .brow .pct{margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums;}
+  .brow i{width:8px; height:8px; border-radius:50%;}
+
+  /* lijsten */
+  .rij{display:flex; align-items:center; gap:11px; padding:10px 2px;}
+  .rij + .rij{border-top:1px solid var(--line);}
+  .rij .ic{width:34px; height:34px; border-radius:10px; background:var(--panel2); display:grid; place-items:center; flex:none; font-size:15px;}
+  .rij .nm{font-weight:600; font-size:13px;} .rij .sb{color:var(--txt3); font-size:11.5px;}
+  .rij .st{margin-left:auto; display:flex; align-items:center; gap:7px; font-size:12px; color:var(--txt2);}
+  .rij .val{font-weight:700; font-variant-numeric:tabular-nums;}
+  .alert .ic{background:rgba(239,68,68,.12);} .alert.warn .ic{background:rgba(245,158,11,.12);}
+
+  canvas{width:100%!important;}
+  .cwrap{height:180px; position:relative;}
+  .err{background:var(--panel); border:1px solid var(--slecht); border-radius:12px; padding:12px 15px; color:var(--txt2); display:none; margin-bottom:14px;}
+
+  /* mobiel */
+  @media (max-width:980px){
+    .grid{grid-template-columns:1fr;}
+    .tabs{display:none;}
+  }
+  @media (max-width:560px){
+    .wrap{padding:14px 13px 32px;}
+    .kpis{grid-template-columns:1fr;}
+    .hero h1{font-size:22px;}
+    .zdetail{grid-template-columns:1fr 1fr;}
+    .zdetail .naam{grid-column:1 / -1;}
+    .top .rechts{width:100%; margin-left:0;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand"><img src="mcs-logo.png" alt="MCS"><b>MCS Climate Control</b></div>
+    <div class="tabs">
+      <button class="on">Overzicht</button>
+      <button onclick="location.href='index.html'">Klassiek</button>
+    </div>
+    <div class="rechts">
+      <div class="chip">
+        <div><div class="v" id="buiten-t">–</div><div class="k">Buiten</div></div>
+        <div><div class="v" id="buiten-h">–</div><div class="k">Vocht</div></div>
+      </div>
+      <div class="live"><span class="dot" id="dot"></span><span id="livetxt">Laden…</span></div>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="grid">
+    <!-- hoofdkolom -->
+    <div class="col">
+      <div class="hero">
+        <h1>Binnenklimaat</h1>
+        <p>Monitor en volg het klimaat per ruimte, live uit The Things Network.</p>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="card plat">
+        <div class="hd"><h3>Plattegrond · live temperatuur</h3><span class="mut3" style="font-size:12px">placeholder — jouw echte plattegrond komt hier</span></div>
+        <div id="platwrap"></div>
+        <div class="legenda">
+          <span><i style="background:var(--cold)"></i>koel</span>
+          <span><i style="background:var(--cool)"></i>fris</span>
+          <span><i style="background:var(--ok)"></i>comfort</span>
+          <span><i style="background:var(--warm)"></i>warm</span>
+          <span><i style="background:var(--hot)"></i>heet</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3 id="zd-titel">Zone-details</h3><span class="mut3" style="font-size:12px">klik een zone op de plattegrond</span></div>
+        <div class="zdetail" id="zdetail"></div>
+      </div>
+    </div>
+
+    <!-- zijbalk -->
+    <div class="col">
+      <div class="card">
+        <div class="hd"><h3>Systeemprestatie</h3><span class="live" style="padding:4px 10px"><span class="dot on"></span>Live</span></div>
+        <div class="ring" id="ring"></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Temperatuur · 24u</h3></div>
+        <div class="cwrap"><canvas id="chart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Sensoren</h3><a href="index.html">Alles ›</a></div>
+        <div id="sensoren"></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Recente alerts</h3></div>
+        <div id="alerts"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================ config / Supabase
+const SB = window.GACS_CONFIG || {};
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+if(!SB.supabaseUrl || SB.supabaseUrl.includes("JOUW-PROJECT-REF")){
+  $("dot").className="dot err"; $("livetxt").textContent="niet geconfigureerd";
+  $("err").style.display="block"; $("err").textContent="config.js is niet ingevuld (supabaseUrl / supabaseAnonKey).";
+  throw new Error("config");
+}
+const H={apikey:SB.supabaseAnonKey, authorization:"Bearer "+SB.supabaseAnonKey};
+async function sbGet(view,q){const r=await fetch(`${SB.supabaseUrl}/rest/v1/${view}?${q}`,{headers:H}); if(!r.ok)throw new Error(view); return r.json();}
+async function sbRpc(fn,b){const r=await fetch(`${SB.supabaseUrl}/rest/v1/rpc/${fn}`,{method:"POST",headers:{...H,"content-type":"application/json"},body:JSON.stringify(b)}); if(!r.ok)throw new Error(fn); return r.json();}
+
+// ============================================================ zones (placeholder-plattegrond)
+// device_id -> positie in de SVG. Buiten staat als outdoor-chip in de topbar.
+const ZONES=[
+  {id:"elsys-ers-1",         x:70,  y:70,  w:170, h:150},
+  {id:"elsys-eye-3",         x:262, y:70,  w:170, h:150},
+  {id:"elsys-eye-2",         x:454, y:70,  w:170, h:150},
+  {id:"elsys-ers-2",         x:70,  y:242, w:170, h:150},
+  {id:"arduino-mkr-binnen-2",x:262, y:242, w:170, h:150},
+  {id:"arduino-mkr-binnen",  x:454, y:242, w:170, h:150},
+];
+const BUITEN="arduino-mkr-buiten";
+const COMFORT=[20,24], CO2_MATIG=800, CO2_SLECHT=1200, VERLOPEN_MIN=120;
+const NAAM={}; // device_id -> display_name
+let status={}, laatste={}, geselecteerd=ZONES[0].id;
+
+const fmt=(v,d=1)=>v==null?"–":Number(v).toLocaleString("nl-NL",{minimumFractionDigits:d,maximumFractionDigits:d});
+const naam=id=>NAAM[id]||id;
+function geleden(ts){const s=Math.max(0,(Date.now()-ts)/1000);
+  if(s<60)return Math.round(s)+" s geleden"; if(s<3600)return Math.round(s/60)+" min geleden";
+  if(s<86400)return Math.round(s/3600)+" uur geleden"; return Math.round(s/86400)+" d geleden";}
+function tempKleur(t){
+  if(t==null)return {c:"#64748b", f:"rgba(148,163,184,.10)"};
+  if(t<19)   return {c:css("--cold"), f:"rgba(56,189,248,.16)"};
+  if(t<21)   return {c:css("--cool"), f:"rgba(45,212,191,.16)"};
+  if(t<23.5) return {c:css("--ok"),   f:"rgba(34,197,94,.16)"};
+  if(t<25.5) return {c:css("--warm"), f:"rgba(245,158,11,.18)"};
+  return {c:css("--hot"), f:"rgba(239,68,68,.20)"};
+}
+const waarde=(id,m)=>laatste[id]&&laatste[id][m]!=null?laatste[id][m]:null;
+const online=id=>status[id]&&status[id].online;
+
+// ============================================================ plattegrond (SVG opbouwen)
+function bouwPlattegrond(){
+  const ducts=`
+    <path class="duct" d="M155 70 V45 H348 V70"/>
+    <path class="duct" d="M348 220 V242"/>
+    <path class="duct" d="M539 70 V45 H348"/>
+    <path class="duct" d="M155 392 V417 H539 V392"/>`;
+  const rooms=ZONES.map(z=>`
+    <g class="zroom" data-id="${z.id}">
+      <rect class="rm" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="12"></rect>
+      <rect class="zfill" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="12" fill="transparent"></rect>
+      <text class="zname" x="${z.x+14}" y="${z.y+26}">…</text>
+      <circle class="zdot" cx="${z.x+z.w-18}" cy="${z.y+21}" r="5" fill="#64748b"></circle>
+      <g transform="translate(${z.x+14},${z.y+z.h-44})">
+        <rect class="zpill" x="0" y="0" width="92" height="32" rx="9"></rect>
+        <text class="ztemp" x="12" y="22">–</text>
+      </g>
+    </g>`).join("");
+  $("platwrap").innerHTML=`
+    <svg viewBox="0 0 694 462" role="img" aria-label="Plattegrond">
+      <defs><filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <rect x="40" y="40" width="614" height="382" rx="18" fill="none" stroke="var(--line)" stroke-width="1.5"></rect>
+      ${ducts}
+      ${rooms}
+    </svg>`;
+  $("platwrap").querySelectorAll(".zroom").forEach(g=>g.addEventListener("click",()=>{geselecteerd=g.dataset.id; tekenZoneDetail();}));
+}
+function vulPlattegrond(){
+  $("platwrap").querySelectorAll(".zroom").forEach(g=>{
+    const id=g.dataset.id, t=waarde(id,"temperature"), k=tempKleur(online(id)?t:null);
+    g.querySelector(".zname").textContent=naam(id);
+    g.querySelector(".zfill").setAttribute("fill",online(id)?k.f:"rgba(148,163,184,.06)");
+    g.querySelector(".zdot").setAttribute("fill",online(id)?css("--goed"):css("--slecht"));
+    g.querySelector(".ztemp").textContent=t!=null?fmt(t,1)+"°":"–";
+    g.querySelector(".ztemp").setAttribute("fill",online(id)&&t!=null?k.c:"var(--txt3)");
+  });
+}
+
+// ============================================================ KPI's
+function tekenKpis(){
+  const zones=ZONES.map(z=>z.id).filter(online);
+  const temps=zones.map(id=>waarde(id,"temperature")).filter(v=>v!=null);
+  const inComfort=temps.filter(t=>t>=COMFORT[0]&&t<=COMFORT[1]).length;
+  const comfortPct=temps.length?Math.round(inComfort/temps.length*100):0;
+  const co2s=ZONES.map(z=>z.id).filter(online).map(id=>waarde(id,"co2")).filter(v=>v!=null);
+  const avgCo2=co2s.length?Math.round(co2s.reduce((a,b)=>a+b,0)/co2s.length):null;
+  const offline=ZONES.map(z=>z.id).filter(id=>status[id]&&!status[id].online).length;
+  const hoogCo2=co2s.filter(c=>c>CO2_SLECHT).length;
+  const alerts=offline+hoogCo2;
+  $("kpis").innerHTML=`
+    <div class="kpi"><div class="ico" style="background:rgba(45,212,191,.14);color:var(--cool)">🌿</div>
+      <div><div class="lbl">Comfort</div><div class="big">${comfortPct}%</div><div class="sub">${inComfort}/${temps.length} zones in bereik</div></div></div>
+    <div class="kpi"><div class="ico" style="background:rgba(56,189,248,.14);color:var(--accent2)">💨</div>
+      <div><div class="lbl">Gem. CO₂</div><div class="big">${avgCo2!=null?avgCo2:"–"}<small style="font-size:13px;font-weight:600;color:var(--txt3)"> ppm</small></div>
+      <div class="sub">${avgCo2==null?"geen data":avgCo2<CO2_MATIG?"goed":avgCo2<CO2_SLECHT?"matig":"slecht"}</div></div></div>
+    <div class="kpi"><div class="ico" style="background:rgba(245,158,11,.14);color:var(--warm)">🔔</div>
+      <div><div class="lbl">Actieve alerts</div><div class="big">${alerts}</div>
+      <div class="sub">${offline} offline · ${hoogCo2} hoog CO₂</div></div></div>`;
+}
+
+// ============================================================ ring
+function tekenRing(){
+  const zones=ZONES.map(z=>z.id);
+  const onl=zones.filter(online).length, onlinePct=Math.round(onl/zones.length*100);
+  const temps=zones.filter(online).map(id=>waarde(id,"temperature")).filter(v=>v!=null);
+  const comfortPct=temps.length?Math.round(temps.filter(t=>t>=COMFORT[0]&&t<=COMFORT[1]).length/temps.length*100):0;
+  const co2s=zones.filter(online).map(id=>waarde(id,"co2")).filter(v=>v!=null);
+  // Getrapt: goed (<800)=100, matig (<1200)=55, slecht=0 — zodat "matig" niet als 0 telt.
+  const luchtPct=co2s.length?Math.round(co2s.reduce((a,c)=>a+(c<CO2_MATIG?100:c<CO2_SLECHT?55:0),0)/co2s.length):0;
+  const optimaal=Math.round((onlinePct+comfortPct+luchtPct)/3);
+  const r=52, C=2*Math.PI*r, off=C*(1-optimaal/100);
+  const items=[["Comfort",comfortPct,"--cool"],["Online",onlinePct,"--accent2"],["Luchtkwaliteit",luchtPct,"--ok"]];
+  $("ring").innerHTML=`
+    <svg width="130" height="130" viewBox="0 0 130 130">
+      <circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--inner)" stroke-width="11"/>
+      <circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 65 65)"/>
+      <text class="mid" x="65" y="63" text-anchor="middle" fill="var(--txt)">${optimaal}%</text>
+      <text class="ml" x="65" y="80" text-anchor="middle">Optimaal</text>
+    </svg>
+    <div class="breakdown">${items.map(([n,p,c])=>`
+      <div class="brow"><i style="background:var(${c})"></i><span class="nm">${n}</span><span class="pct">${p}%</span></div>`).join("")}</div>`;
+}
+
+// ============================================================ zone-detail
+function tekenZoneDetail(){
+  const id=geselecteerd, on=online(id);
+  $("zd-titel").textContent="Zone · "+naam(id);
+  const cel=(m,lbl,dec,eh)=>{const v=waarde(id,m); return `<div class="metric"><div class="m">${v!=null?fmt(v,dec):"–"}<small style="font-size:12px;color:var(--txt3)">${v!=null?" "+eh:""}</small></div><div class="ml">${lbl}</div></div>`;};
+  $("zdetail").innerHTML=`
+    <div class="naam"><span class="dot ${on?'on':'err'}"></span><div><b>${naam(id)}</b><div class="s">${on?"online":"offline"} · ${status[id]?geleden(Date.parse(status[id].last_seen)):""}</div></div></div>
+    ${cel("temperature","Temperatuur",1,"°C")}
+    ${cel("humidity","Vocht",0,"%")}
+    ${cel("co2","CO₂",0,"ppm")}
+    ${cel("net.rssi","Signaal",0,"dBm")}`;
+}
+
+// ============================================================ sensorlijst + alerts
+function tekenSensoren(){
+  $("sensoren").innerHTML=ZONES.concat([{id:BUITEN}]).map(z=>{
+    const id=z.id, on=online(id), t=waarde(id,"temperature");
+    return `<div class="rij"><div class="ic">${on?"🟢":"⚫"}</div>
+      <div><div class="nm">${naam(id)}</div><div class="sb">${status[id]?geleden(Date.parse(status[id].last_seen)):"–"}</div></div>
+      <div class="st"><span class="${on?'':'mut3'}" style="color:${on?'var(--goed)':'var(--txt3)'}">${on?"online":"offline"}</span>
+      <span class="val">${t!=null?fmt(t,1)+"°":"–"}</span></div></div>`;
+  }).join("");
+}
+function tekenAlerts(){
+  const a=[];
+  ZONES.concat([{id:BUITEN}]).forEach(z=>{const id=z.id;
+    if(status[id]&&!status[id].online) a.push({warn:false,ic:"📡",nm:naam(id)+" – geen contact",sb:"laatst "+geleden(Date.parse(status[id].last_seen))});
+  });
+  ZONES.forEach(z=>{const id=z.id, c=waarde(id,"co2");
+    if(online(id)&&c!=null&&c>CO2_SLECHT) a.push({warn:true,ic:"💨",nm:naam(id)+" – hoog CO₂",sb:Math.round(c)+" ppm"});
+  });
+  $("alerts").innerHTML=a.length? a.slice(0,6).map(x=>`
+    <div class="rij alert ${x.warn?'warn':''}"><div class="ic">${x.ic}</div>
+      <div><div class="nm">${x.nm}</div><div class="sb">${x.sb}</div></div></div>`).join("")
+    : `<div class="mut3" style="padding:8px 2px;font-size:13px">Geen actieve alerts 🎉</div>`;
+}
+
+// ============================================================ grafiek
+let chart;
+async function tekenChart(){
+  const tot=Date.now(), van=tot-24*3600000;
+  const ids=ZONES.map(z=>z.id);
+  let rijen=[]; try{ rijen=await sbRpc("readings_binned",{p_devices:ids,p_metric:"temperature",p_from:new Date(van).toISOString(),p_to:new Date(tot).toISOString(),p_bucket_minutes:30}); }catch(e){return;}
+  const per={}; for(const r of rijen)(per[r.device_id]||(per[r.device_id]=[])).push({x:Date.parse(r.bucket),y:r.avg_value});
+  for(const id in per) per[id].sort((a,b)=>a.x-b.x);
+  const pal=["--cool","--accent2","--ok","--warm","#c084fc","#f472b6"];
+  const sets=ids.filter(id=>per[id]&&per[id].length).map((id,i)=>{const c=pal[i%pal.length]; const col=c.startsWith("--")?css(c):c;
+    return {label:naam(id),data:per[id],borderColor:col,backgroundColor:col,borderWidth:2,tension:.4,pointRadius:0,spanGaps:true};});
+  const opt={responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{x:{type:"time",time:{unit:"hour"},grid:{color:css("--line")},ticks:{color:css("--txt3"),maxTicksLimit:6}},
+            y:{grid:{color:css("--line")},ticks:{color:css("--txt3"),callback:v=>v+"°"}}},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y,1)}°C`}}}};
+  if(chart){chart.data.datasets=sets; chart.update();}
+  else chart=new Chart($("chart"),{type:"line",data:{datasets:sets},options:opt});
+}
+
+// ============================================================ data ophalen + loop
+async function ververLaatste(){
+  try{
+    const [st,lr]=await Promise.all([
+      sbGet("device_status","select=device_id,display_name,last_seen,online"),
+      sbGet("latest_readings","select=device_id,metric,value"),
+    ]);
+    status={}; laatste={};
+    for(const d of st){status[d.device_id]=d; NAAM[d.device_id]=d.display_name||d.device_id;}
+    for(const r of lr){(laatste[r.device_id]||(laatste[r.device_id]={}))[r.metric]=r.value;}
+    const nieuwste=Math.max(0,...st.map(d=>Date.parse(d.last_seen)||0));
+    $("dot").className="dot on"; $("livetxt").textContent="Live · "+(nieuwste?geleden(nieuwste):"verbonden");
+    $("buiten-t").textContent=waarde(BUITEN,"temperature")!=null?fmt(waarde(BUITEN,"temperature"),1)+"°":"–";
+    $("buiten-h").textContent=waarde(BUITEN,"humidity")!=null?Math.round(waarde(BUITEN,"humidity"))+"%":"–";
+    tekenKpis(); tekenRing(); vulPlattegrond(); tekenZoneDetail(); tekenSensoren(); tekenAlerts();
+  }catch(e){ $("dot").className="dot err"; $("livetxt").textContent="verbinding mislukt"; }
+}
+
+bouwPlattegrond();
+ververLaatste().then(tekenChart);
+setInterval(ververLaatste, 15000);
+setInterval(tekenChart, 60000);
+</script>
+</body>
+</html>
