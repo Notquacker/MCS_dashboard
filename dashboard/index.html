@@ -1,106 +1,602 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GACS · Binnenklimaat MCS</title>
-<meta name="description" content="Live binnenklimaat- en bezettingsdata van de LoRaWAN-sensoren bij MCS." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark" aria-hidden="true"></span>
-    <div>
-      <h1>Binnenklimaat MCS</h1>
-      <p class="brand-sub">GACS werkplaatsproject &middot; LoRaWAN via The Things Network</p>
-    </div>
-  </div>
-  <div class="status" id="connection-status" data-state="connecting">
-    <span class="status-dot" aria-hidden="true"></span>
-    <span class="status-text">verbinden…</span>
-  </div>
-</header>
-
-<main>
-
-  <!-- ---------------------------------------------------------------- -->
-  <section class="panel" aria-labelledby="sensors-heading">
-    <div class="panel-head">
-      <h2 id="sensors-heading">Sensoren</h2>
-      <p class="panel-note" id="last-update">—</p>
-    </div>
-    <div class="device-grid" id="device-grid">
-      <p class="placeholder">Data laden…</p>
-    </div>
-  </section>
-
-  <!-- ---------------------------------------------------------------- -->
-  <section class="panel" aria-labelledby="chart-heading">
-    <div class="panel-head">
-      <h2 id="chart-heading">Verloop</h2>
-      <div class="range-group" role="group" aria-label="Tijdsbereik">
-        <button type="button" class="range-btn" data-hours="6">6 uur</button>
-        <button type="button" class="range-btn is-active" data-hours="24">24 uur</button>
-        <button type="button" class="range-btn" data-hours="168">7 dagen</button>
-        <button type="button" class="range-btn" data-hours="720">30 dagen</button>
-      </div>
-    </div>
-
-    <div class="metric-chips" id="metric-chips" role="group" aria-label="Meetwaarde"></div>
-
-    <div class="chart-wrap">
-      <canvas id="chart" aria-label="Grafiek van de geselecteerde meetwaarde per sensor" role="img"></canvas>
-      <p class="placeholder chart-placeholder" id="chart-placeholder">Grafiek laden…</p>
-    </div>
-
-    <div class="legend" id="legend"></div>
-    <p class="panel-note" id="chart-note"></p>
-  </section>
-
-  <!-- ---------------------------------------------------------------- -->
-  <section class="panel" aria-labelledby="health-heading">
-    <div class="panel-head">
-      <h2 id="health-heading">Netwerkstatus</h2>
-      <p class="panel-note">Signaalkwaliteit en laatste contact per sensor</p>
-    </div>
-    <div class="table-scroll">
-      <table class="health-table">
-        <thead>
-          <tr>
-            <th scope="col">Sensor</th>
-            <th scope="col">Ruimte</th>
-            <th scope="col">Model</th>
-            <th scope="col" class="num">RSSI</th>
-            <th scope="col" class="num">SNR</th>
-            <th scope="col" class="num">SF</th>
-            <th scope="col" class="num">Accu</th>
-            <th scope="col" class="num">Metingen 24u</th>
-            <th scope="col">Laatste contact</th>
-          </tr>
-        </thead>
-        <tbody id="health-body">
-          <tr><td colspan="9" class="placeholder">Laden…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-</main>
-
-<footer class="footer">
-  <p>Data via TTN webhook → Supabase. Dashboard leest read-only met de anon key.</p>
-  <p id="error-slot" class="error" hidden></p>
-</footer>
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCS binnenklimaat</title>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
-<script type="module" src="app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --pagina: #f9f9f7; --vlak: #fcfcfb;
+    --tekst-1: #0b0b0b; --tekst-2: #52514e; --tekst-3: #898781;
+    --raster: #e1e0d9; --as: #c3c2b7; --rand: rgba(11,11,11,0.10); --wash: rgba(11,11,11,0.04);
+    --goed: #0ca30c; --matig: #fab219; --slecht: #d03b3b;
+    --band: rgba(12,163,12,0.07);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --pagina: #0d0d0d; --vlak: #1a1a19;
+      --tekst-1: #f0efec; --tekst-2: #c3c2b7; --tekst-3: #898781;
+      --raster: #2c2c2a; --as: #383835; --rand: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+      --band: rgba(12,163,12,0.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--pagina); color: var(--tekst-1);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 24px 20px 40px; }
+  button, input { font: inherit; color: inherit; }
+
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  .sub { color: var(--tekst-2); font-size: 13px; margin-top: 2px; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--tekst-2); font-size: 13px; }
+  .stip { width: 8px; height: 8px; border-radius: 50%; background: var(--tekst-3); }
+  .stip.live { background: var(--goed); box-shadow: 0 0 0 3px rgba(12,163,12,.18); }
+  .stip.fout { background: var(--slecht); }
+
+  /* ---- bediening */
+  .bediening { background: var(--vlak); border: 1px solid var(--rand); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; display: grid; gap: 10px; }
+  .regel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .regel > .kop { width: 96px; color: var(--tekst-3); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .groep { display: inline-flex; border: 1px solid var(--rand); border-radius: 8px; overflow: hidden; }
+  .groep button { background: var(--vlak); color: var(--tekst-2); border: 0; padding: 5px 11px; font-size: 13px; cursor: pointer; }
+  .groep button + button { border-left: 1px solid var(--rand); }
+  .groep button:hover { background: var(--wash); }
+  .groep button[aria-pressed="true"] { background: var(--tekst-1); color: var(--vlak); font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rand); background: var(--vlak);
+          border-radius: 99px; padding: 4px 11px 4px 8px; font-size: 13px; cursor: pointer; color: var(--tekst-2); }
+  .chip:hover { background: var(--wash); }
+  .chip .vink { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--as); display: grid; place-items: center; font-size: 10px; color: #fff; }
+  .chip[aria-pressed="true"] { color: var(--tekst-1); border-color: var(--as); }
+  .chip[aria-pressed="true"] .vink { border-color: transparent; }
+  .chip[aria-pressed="true"] .vink::after { content: "✓"; font-weight: 700; }
+  .link { background: none; border: 0; color: var(--tekst-3); font-size: 12px; cursor: pointer; padding: 2px 4px; text-decoration: underline; }
+  .link:hover { color: var(--tekst-1); }
+  .eigen { display: none; align-items: center; gap: 6px; font-size: 13px; color: var(--tekst-2); }
+  .eigen.aan { display: inline-flex; }
+  .eigen input { background: var(--vlak); border: 1px solid var(--rand); border-radius: 6px; padding: 4px 6px; font-size: 13px; }
+  .knop { background: var(--vlak); border: 1px solid var(--rand); border-radius: 8px; padding: 5px 11px; font-size: 13px; cursor: pointer; }
+  .knop:hover { background: var(--wash); }
+  .rechts { margin-left: auto; display: inline-flex; gap: 8px; }
+
+  /* ---- kaarten */
+  .kaarten { display: grid; gap: 10px; margin-bottom: 16px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .kaart { background: var(--vlak); border: 1px solid var(--rand); border-radius: 12px; padding: 12px 12px 10px; cursor: pointer; text-align: left; }
+  .kaart:hover { border-color: var(--as); }
+  .kaart.uit { opacity: .45; }
+  .kaart.oud .temp, .kaart.oud .rij b { color: var(--tekst-3); }
+  .kaart .naam { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .kleur { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+  .kaart .soort { color: var(--tekst-3); font-size: 12px; margin: 1px 0 8px 18px; }
+  .kaart .temp { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  .kaart .temp small { font-size: 14px; font-weight: 500; color: var(--tekst-2); }
+  .kaart .rij { display: flex; justify-content: space-between; margin-top: 4px; color: var(--tekst-2); font-size: 13px; }
+  .kaart .rij b { color: var(--tekst-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kaart .tijd { color: var(--tekst-3); font-size: 12px; margin-top: 6px; }
+  .label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 0 6px 0 4px;
+           border-radius: 99px; margin-left: 5px; color: var(--tekst-1); border: 1px solid var(--rand); }
+  .label i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  /* ---- grafieken */
+  .grafieken { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); }
+  .paneel { min-width: 0; background: var(--vlak); border: 1px solid var(--rand); border-radius: 12px; padding: 14px 16px 16px; }
+  .paneel.breed { grid-column: 1 / -1; }
+  .paneel h2 { font-size: 14px; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .paneel .uitleg { color: var(--tekst-3); font-size: 12px; margin: 2px 0 8px; }
+  .canvas { position: relative; height: 260px; }
+  .mini-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); margin-top: 8px; }
+  .mini { min-width: 0; }
+  .mini h3 { font-size: 13px; margin: 0 0 4px; font-weight: 600; color: var(--tekst-2); }
+  .mini h3 span { color: var(--tekst-1); font-variant-numeric: tabular-nums; margin-left: 6px; }
+  .mini .canvas { height: 180px; }
+  .leeg { color: var(--tekst-3); font-size: 13px; padding: 30px 0; text-align: center; }
+
+  .melding { background: var(--vlak); border: 1px solid var(--rand); border-left: 3px solid var(--slecht);
+             border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: none; color: var(--tekst-2); }
+  footer { color: var(--tekst-3); font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>MCS binnenklimaat</h1>
+      <div class="sub">Live sensordata uit The Things Network · app mcs-elsys</div>
+    </div>
+    <div class="status"><span class="stip" id="stip"></span><span id="statustekst">Laden…</span></div>
+  </header>
+
+  <div class="melding" id="melding"></div>
+
+  <div class="kaarten" id="kaarten"></div>
+
+  <div class="bediening">
+    <div class="regel">
+      <span class="kop">Periode</span>
+      <div class="groep" id="periodes">
+        <button data-uren="1">1 uur</button>
+        <button data-uren="6">6 uur</button>
+        <button data-uren="24">24 uur</button>
+        <button data-uren="168">7 dagen</button>
+        <button data-uren="720">30 dagen</button>
+        <button data-uren="eigen">Eigen…</button>
+      </div>
+      <span class="eigen" id="eigen">
+        van <input type="datetime-local" id="van"> tot <input type="datetime-local" id="tot">
+        <button class="knop" id="toepassen">Toepassen</button>
+      </span>
+      <span class="rechts">
+        <span class="kop" style="width:auto">Weergave</span>
+        <div class="groep" id="weergaven">
+          <button data-w="meting">Per meting</button>
+          <button data-w="apparaat">Per apparaat</button>
+        </div>
+        <button class="knop" id="csv" title="Data van de huidige selectie downloaden">CSV</button>
+      </span>
+    </div>
+    <div class="regel" id="regel-apparaten">
+      <span class="kop">Apparaten</span>
+      <span id="chips-apparaten" style="display:contents"></span>
+      <button class="link" data-alles="apparaten">alles</button><button class="link" data-geen="apparaten">geen</button>
+    </div>
+    <div class="regel">
+      <span class="kop">Metingen</span>
+      <span id="chips-velden" style="display:contents"></span>
+      <button class="link" data-alles="velden">alles</button><button class="link" data-geen="velden">geen</button>
+    </div>
+  </div>
+
+  <div class="grafieken" id="grafieken"></div>
+  <footer id="voet"></footer>
+</div>
+
+<script>
+// ============================================================ instellingen
+// Pas hier de namen aan zodra je weet welke sensor in welke ruimte hangt.
+// De volgorde bepaalt de kleur: die blijft per sensor altijd hetzelfde.
+// Namen komen uit Supabase (device_status.display_name = de TTN-labels).
+// Deze lijst bepaalt alleen de volgorde, het sensortype en de vaste kleur.
+const APPARATEN = [
+  { id: "elsys-ers-1",          soort: "Elsys ERS CO₂" },
+  { id: "elsys-ers-2",          soort: "Elsys ERS CO₂" },
+  { id: "elsys-eye-3",          soort: "Elsys ERS Eye" },
+  { id: "elsys-eye-2",          soort: "Elsys ERS Eye" },
+  { id: "arduino-mkr-binnen",   soort: "Arduino MKR" },
+  { id: "arduino-mkr-binnen-2", soort: "Arduino MKR" },
+  { id: "arduino-mkr-buiten",   soort: "Arduino MKR · DHT22", buiten: true },
+];
+// Devices die nooit getoond worden, ook niet als ze data sturen
+const VERBORGEN = [];
+const namen = {};  // device_id -> label uit Supabase (device_status.display_name)
+
+// Alle metingen die het dashboard kent (volgorde = volgorde op het scherm)
+const VELDEN = {
+  temperature:         { naam: "Temperatuur",         eenheid: "°C",  dec: 1 },
+  humidity:            { naam: "Luchtvochtigheid",    eenheid: "%",   dec: 0, band: [40, 60], uitleg: "groene band = comfortzone 40–60 %" },
+  co2:                 { naam: "CO₂",                 eenheid: "ppm", dec: 0, uitleg: "lijnen op 800 (matig) en 1200 (slecht)" },
+  light:               { naam: "Licht",               eenheid: "lux", dec: 0 },
+  motion:              { naam: "Beweging",            eenheid: "",    dec: 0, uitleg: "aantal bewegingen per bericht" },
+  occupancy:           { naam: "Bezetting",           eenheid: "",    dec: 0 },
+  externalTemperature: { naam: "Externe temperatuur", eenheid: "°C",  dec: 1 },
+  vdd:                 { naam: "Batterijspanning",    eenheid: "mV",  dec: 0 },
+  "net.rssi":          { naam: "Signaal (RSSI)",      eenheid: "dBm", dec: 0, uitleg: "hoe dichter bij 0, hoe beter" },
+  "net.snr":           { naam: "Signaal (SNR)",       eenheid: "dB",  dec: 1 },
+  "net.sf":            { naam: "Spreading factor",    eenheid: "",    dec: 0 },
+  "net.battery_pct":   { naam: "Accu",                eenheid: "%",   dec: 0 },
+  "net.gateways":      { naam: "Gateways",            eenheid: "",    dec: 0 },
+};
+const STANDAARD_VELDEN = ["temperature", "humidity", "co2"];
+const CO2_MATIG = 800, CO2_SLECHT = 1200;
+const VERLOPEN_MIN = 30;
+const VERVERS_LAATSTE_S = 15, VERVERS_REEKSEN_S = 30;
+
+// ============================================================ hulpjes
+Chart.defaults.locale = "nl-NL";
+const $ = id => document.getElementById(id);
+
+// ============================================================ Supabase
+// Leest read-only uit Supabase met de publishable key (config.js). Geen
+// server nodig: dit is een statische pagina die rechtstreeks de REST API
+// en de readings_binned-RPC aanroept.
+const SB = window.GACS_CONFIG || {};
+if (!SB.supabaseUrl || SB.supabaseUrl.includes("JOUW-PROJECT-REF")) {
+  $("stip").className = "stip fout";
+  $("statustekst").textContent = "niet geconfigureerd";
+  const m = $("melding"); m.style.display = "block";
+  m.textContent = "config.js is nog niet ingevuld. Zet supabaseUrl en supabaseAnonKey op de waarden uit Supabase Studio → Project Settings → API.";
+  throw new Error("config ontbreekt");
+}
+const sbHeaders = { apikey: SB.supabaseAnonKey, authorization: "Bearer " + SB.supabaseAnonKey };
+async function sbGet(view, query) {
+  const r = await fetch(`${SB.supabaseUrl}/rest/v1/${view}?${query}`, { headers: sbHeaders });
+  if (!r.ok) throw new Error(`${view}: HTTP ${r.status}`);
+  return r.json();
+}
+async function sbRpc(fn, body) {
+  const r = await fetch(`${SB.supabaseUrl}/rest/v1/rpc/${fn}`, {
+    method: "POST", headers: { ...sbHeaders, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`${fn}: HTTP ${r.status}`);
+  return r.json();
+}
+// Bucketgrootte (minuten) schaalt mee met het bereik, zodat 30 dagen geen
+// duizenden punten oplevert. Spiegelt readings_binned in de database.
+function bucketMin(spanMs) {
+  const u = spanMs / 3600000;
+  if (u <= 6) return 5;
+  if (u <= 24) return 15;
+  if (u <= 24 * 7) return 60;
+  return 240;
+}
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const veldInfo = v => VELDEN[v] || { naam: v, eenheid: "", dec: 1 };
+const fmt = (v, d = 1) => v == null ? "–" : v.toLocaleString("nl-NL", { minimumFractionDigits: d, maximumFractionDigits: d });
+const metEenheid = (v, veld) => { const i = veldInfo(veld); return fmt(v, i.dec) + (i.eenheid ? " " + i.eenheid : ""); };
+
+let bekendeIds = APPARATEN.map(a => a.id);   // groeit als er onbekende devices binnenkomen
+const info = id => { const a = APPARATEN.find(a => a.id === id) || { id, soort: "" }; return { ...a, naam: namen[id] || a.naam || id }; };
+const kleur = id => { const i = bekendeIds.indexOf(id); return css(`--s${(i < 0 ? 0 : i) % 8 + 1}`); };
+
+function geleden(ts) {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return `${s} s geleden`;
+  if (s < 3600) return `${Math.round(s / 60)} min geleden`;
+  if (s < 86400) return `${Math.round(s / 3600)} uur geleden`;
+  return `${Math.round(s / 86400)} d geleden`;
+}
+function co2Label(ppm) {
+  if (ppm == null) return "";
+  const [k, t] = ppm < CO2_MATIG ? ["--goed", "Goed"] : ppm < CO2_SLECHT ? ["--matig", "Matig"] : ["--slecht", "Slecht"];
+  return `<span class="label"><i style="background:var(${k})"></i>${t}</span>`;
+}
+const naarLokaal = ms => { const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+
+// ============================================================ toestand
+const opgeslagen = (() => { try { return JSON.parse(localStorage.getItem("mcs-dashboard") || "{}"); } catch { return {}; } })();
+const st = {
+  uren: opgeslagen.uren ?? 24,             // getal of "eigen"
+  van: opgeslagen.van ?? null, tot: opgeslagen.tot ?? null,
+  weergave: opgeslagen.weergave || "meting",
+  apparaten: new Set((opgeslagen.apparaten || APPARATEN.map(a => a.id)).filter(id => !VERBORGEN.includes(id))),
+  velden: new Set(opgeslagen.velden || STANDAARD_VELDEN),
+};
+function bewaar() {
+  try { localStorage.setItem("mcs-dashboard", JSON.stringify({ ...st, apparaten: [...st.apparaten], velden: [...st.velden] })); } catch {}
+}
+
+let laatste = {};            // /api/laatste -> apparaten
+let reeksData = null;        // /api/reeksen -> laatste antwoord
+let beschikbaar = new Set(); // velden die in de data voorkomen
+
+// ============================================================ bediening
+function tekenBediening() {
+  document.querySelectorAll("#periodes button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.uren) === String(st.uren)));
+  $("eigen").classList.toggle("aan", st.uren === "eigen");
+  document.querySelectorAll("#weergaven button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === st.weergave));
+
+  $("chips-apparaten").innerHTML = bekendeIds.map(id => `
+    <button class="chip" data-apparaat="${id}" aria-pressed="${st.apparaten.has(id)}">
+      <span class="vink" style="${st.apparaten.has(id) ? `background:${kleur(id)}` : ""}"></span>${info(id).naam}
+    </button>`).join("");
+
+  const velden = Object.keys(VELDEN).filter(v => beschikbaar.has(v) || st.velden.has(v))
+    .concat([...beschikbaar].filter(v => !VELDEN[v]));
+  $("chips-velden").innerHTML = velden.map(v => `
+    <button class="chip" data-veld="${v}" aria-pressed="${st.velden.has(v)}">
+      <span class="vink" style="${st.velden.has(v) ? "background:var(--tekst-2)" : ""}"></span>${veldInfo(v).naam}
+    </button>`).join("");
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button, .kaart");
+  if (!t) return;
+  if (t.dataset.uren) {
+    st.uren = t.dataset.uren === "eigen" ? "eigen" : +t.dataset.uren;
+    if (st.uren === "eigen") {
+      if (!st.van) { st.tot = Date.now(); st.van = st.tot - 86400000; }
+      $("van").value = naarLokaal(st.van); $("tot").value = naarLokaal(st.tot);
+    }
+  } else if (t.id === "toepassen") {
+    const v = new Date($("van").value).getTime(), w = new Date($("tot").value).getTime();
+    if (!(v < w)) { $("van").focus(); return; }
+    st.van = v; st.tot = w;
+  } else if (t.dataset.w) {
+    st.weergave = t.dataset.w;
+  } else if (t.dataset.apparaat) {
+    const id = t.dataset.apparaat; st.apparaten.has(id) ? st.apparaten.delete(id) : st.apparaten.add(id);
+  } else if (t.dataset.veld) {
+    const v = t.dataset.veld; st.velden.has(v) ? st.velden.delete(v) : st.velden.add(v);
+  } else if (t.dataset.alles) {
+    if (t.dataset.alles === "apparaten") st.apparaten = new Set(bekendeIds);
+    else st.velden = new Set([...beschikbaar]);
+  } else if (t.dataset.geen) {
+    if (t.dataset.geen === "apparaten") st.apparaten.clear(); else st.velden.clear();
+  } else if (t.classList.contains("kaart")) {
+    // Klik op een kaart: alleen dit apparaat, met al zijn metingen
+    const id = t.dataset.id;
+    st.apparaten = new Set([id]); st.weergave = "apparaat";
+    st.velden = new Set(Object.keys((laatste[id] || {}).waarden || {}).filter(v => v !== "rssi"));
+    if (!st.velden.size) st.velden = new Set(STANDAARD_VELDEN);
+    window.scrollTo({ top: $("grafieken").offsetTop - 12, behavior: "smooth" });
+  } else if (t.id === "csv") {
+    return downloadCsv();
+  } else return;
+  bewaar(); tekenBediening(); tekenKaarten(); bouwGrafieken(); ververReeksen();
+});
+
+// ============================================================ kaarten
+function tekenKaarten() {
+  $("kaarten").innerHTML = bekendeIds.map(id => {
+    const a = info(id), d = laatste[id], w = d ? d.waarden : {};
+    const val = k => w[k] ? w[k].waarde : null;
+    const oud = !d || Date.now() - d.laatst_gezien > VERLOPEN_MIN * 60000;
+    const co2 = val("co2");
+    return `<div class="kaart${oud ? " oud" : ""}${st.apparaten.has(id) ? "" : " uit"}" data-id="${id}" title="Klik: alleen dit apparaat bekijken">
+      <div class="naam"><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}</div>
+      <div class="soort">${a.soort}</div>
+      <div class="temp">${fmt(val("temperature"))}<small> °C</small></div>
+      <div class="rij"><span>Vochtigheid</span><b>${fmt(val("humidity"), 0)} %</b></div>
+      ${co2 != null ? `<div class="rij"><span>CO₂</span><span><b>${fmt(co2, 0)}</b>${co2Label(co2)}</span></div>` : ""}
+      <div class="tijd">${d ? (oud ? "Geen data sinds " : "") + geleden(d.laatst_gezien) : "Nog geen data"}</div>
+    </div>`;
+  }).join("");
+}
+
+// ============================================================ grafieken
+const drempelPlugin = {
+  id: "drempels",
+  beforeDatasetsDraw(chart, _, opt) {
+    if (!opt || (!opt.band && !opt.lijnen)) return;
+    const { ctx, chartArea: c, scales: { y } } = chart;
+    ctx.save();
+    if (opt.band) {
+      const y1 = Math.max(c.top, y.getPixelForValue(opt.band[1])), y0 = Math.min(c.bottom, y.getPixelForValue(opt.band[0]));
+      if (y0 > y1) { ctx.fillStyle = css("--band"); ctx.fillRect(c.left, y1, c.width, y0 - y1); }
+    }
+    for (const l of opt.lijnen || []) {
+      const py = y.getPixelForValue(l.waarde);
+      if (py < c.top || py > c.bottom) continue;
+      ctx.strokeStyle = css(l.kleur); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(c.left, py); ctx.lineTo(c.right, py); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = css("--tekst-3"); ctx.font = "11px system-ui"; ctx.textAlign = "left";
+      ctx.fillText(l.tekst, c.left + 4, py - 4);
+    }
+    ctx.restore();
+  }
+};
+const kruisPlugin = {
+  id: "kruis",
+  afterDatasetsDraw(chart) {
+    const act = chart.tooltip && chart.tooltip.getActiveElements();
+    if (!act || !act.length) return;
+    const { ctx, chartArea: c } = chart, x = act[0].element.x;
+    ctx.save(); ctx.strokeStyle = css("--as"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, c.top); ctx.lineTo(x, c.bottom); ctx.stroke(); ctx.restore();
+  }
+};
+
+let grafieken = {};   // sleutel "veld|apparaat" of "veld|*"
+let indelingSleutel = "";
+
+function drempelsVoor(veld) {
+  if (veld === "co2") return { lijnen: [{ waarde: CO2_MATIG, kleur: "--matig", tekst: "800 ppm" }, { waarde: CO2_SLECHT, kleur: "--slecht", tekst: "1200 ppm" }] };
+  if (VELDEN[veld] && VELDEN[veld].band) return { band: VELDEN[veld].band };
+  return {};
+}
+
+function maakGrafiek(canvas, veld, metLegenda) {
+  const i = veldInfo(veld);
+  const y = { grid: { color: css("--raster") }, border: { display: false }, ticks: { color: css("--tekst-3") } };
+  if (veld === "humidity") Object.assign(y, { suggestedMin: 30, suggestedMax: 65 });
+  if (veld === "co2") Object.assign(y, { suggestedMin: 400, suggestedMax: 900 });
+  return new Chart(canvas, {
+    type: "line",
+    data: { datasets: [] },
+    plugins: [drempelPlugin, kruisPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "nearest", axis: "x", intersect: false },
+      elements: { line: { borderWidth: 2, cubicInterpolationMode: "monotone" }, point: { radius: 0, hoverRadius: 5, hitRadius: 8 } },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "EEE d MMM HH:mm", displayFormats: { minute: "HH:mm", hour: "HH:mm", day: "d MMM" } },
+             grid: { display: false }, border: { color: css("--as") }, ticks: { color: css("--tekst-3"), maxRotation: 0, autoSkipPadding: 18 } },
+        y
+      },
+      plugins: {
+        legend: { display: metLegenda, position: "top", align: "start",
+                  labels: { color: css("--tekst-2"), boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
+        tooltip: {
+          backgroundColor: css("--vlak"), titleColor: css("--tekst-1"), bodyColor: css("--tekst-2"),
+          borderColor: css("--rand"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+          itemSort: (a, b) => b.parsed.y - a.parsed.y,
+          callbacks: { label: c => ` ${c.dataset.label}: ${metEenheid(c.parsed.y, veld)}` }
+        },
+        drempels: drempelsVoor(veld)
+      }
+    }
+  });
+}
+
+function geselecteerdeVelden() { return Object.keys(VELDEN).concat([...beschikbaar].filter(v => !VELDEN[v])).filter(v => st.velden.has(v)); }
+function geselecteerdeApparaten() { return bekendeIds.filter(id => st.apparaten.has(id)); }
+function veldenVan(id) { return new Set(Object.keys((laatste[id] || {}).waarden || {})); }
+
+function bouwGrafieken() {
+  const velden = geselecteerdeVelden(), apps = geselecteerdeApparaten();
+  const sleutel = JSON.stringify([st.weergave, velden, apps, apps.map(id => [...veldenVan(id)].sort())]);
+  if (sleutel === indelingSleutel) return;
+  indelingSleutel = sleutel;
+  Object.values(grafieken).forEach(g => g.destroy());
+  grafieken = {};
+  const doel = $("grafieken");
+
+  if (!velden.length || !apps.length) {
+    doel.innerHTML = `<div class="paneel breed"><div class="leeg">Kies minstens één apparaat en één meting.</div></div>`;
+    return;
+  }
+
+  if (st.weergave === "meting") {
+    doel.innerHTML = velden.map(v => {
+      const i = veldInfo(v);
+      return `<section class="paneel${velden.length === 1 ? " breed" : ""}">
+        <h2>${i.naam}</h2>
+        <div class="uitleg">${[i.eenheid, i.uitleg].filter(Boolean).join(" · ") || "&nbsp;"}</div>
+        <div class="canvas"><canvas data-sleutel="${v}|*"></canvas></div>
+      </section>`;
+    }).join("");
+  } else {
+    doel.innerHTML = apps.map(id => {
+      const heeft = veldenVan(id);
+      const vs = velden.filter(v => heeft.has(v) || !laatste[id]);
+      const a = info(id);
+      return `<section class="paneel breed">
+        <h2><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}</h2>
+        <div class="uitleg">${a.soort}${laatste[id] ? " · laatste bericht " + geleden(laatste[id].laatst_gezien) : " · nog geen data"}</div>
+        ${vs.length ? `<div class="mini-raster">${vs.map(v => `
+          <div class="mini">
+            <h3>${veldInfo(v).naam}<span data-nu="${id}|${v}"></span></h3>
+            <div class="canvas"><canvas data-sleutel="${v}|${id}"></canvas></div>
+          </div>`).join("")}</div>`
+        : `<div class="leeg">Dit apparaat meet geen van de gekozen metingen.</div>`}
+      </section>`;
+    }).join("");
+  }
+  doel.querySelectorAll("canvas[data-sleutel]").forEach(c => {
+    const [veld, app] = c.dataset.sleutel.split("|");
+    grafieken[c.dataset.sleutel] = maakGrafiek(c, veld, app === "*");
+  });
+  if (reeksData) vulGrafieken();
+}
+
+function dataset(id, punten, blokMs) {
+  const k = kleur(id), data = [];
+  const gat = Math.max(blokMs * 3, 20 * 60000);
+  punten.forEach(([t, v], i) => {
+    if (i && t - punten[i - 1][0] > gat) data.push({ x: t - 1, y: null });
+    data.push({ x: t, y: v });
+  });
+  return {
+    label: info(id).naam, data, borderColor: k, backgroundColor: k,
+    borderDash: info(id).buiten ? [5, 4] : [], spanGaps: false,
+    pointRadius: punten.length < 20 ? 3.5 : 0, pointBorderColor: css("--vlak"), pointBorderWidth: 1.5
+  };
+}
+
+function vulGrafieken() {
+  const { reeksen, blok_ms, van, tot } = reeksData;
+  for (const [sleutel, g] of Object.entries(grafieken)) {
+    const [veld, app] = sleutel.split("|");
+    const per = reeksen[veld] || {};
+    const ids = app === "*" ? geselecteerdeApparaten().filter(id => per[id]) : (per[app] ? [app] : []);
+    g.data.datasets = ids.map(id => dataset(id, per[id], blok_ms));
+    const x = g.options.scales.x;
+    x.min = van; x.max = tot;
+    x.time.unit = tot - van <= 3 * 3600000 ? "minute" : tot - van <= 2 * 86400000 ? "hour" : "day";
+    g.update();
+  }
+  // Huidige waarde naast de mini-titels
+  document.querySelectorAll("[data-nu]").forEach(el => {
+    const [id, v] = el.dataset.nu.split("|"); const w = laatste[id] && laatste[id].waarden[v];
+    el.textContent = w ? metEenheid(w.waarde, v) : "";
+  });
+  const blok = blok_ms === 0 ? "ruwe metingen" : `gemiddelde per ${blok_ms >= 3600000 ? blok_ms / 3600000 + " uur" : blok_ms / 60000 + " min"}`;
+  $("voet").textContent = `${blok} · ververst ${new Date().toLocaleTimeString("nl-NL")}`;
+}
+
+// ============================================================ CSV
+function downloadCsv() {
+  if (!reeksData) return;
+  const regels = ["tijd;apparaat;meting;waarde;min;max"];
+  for (const [veld, per] of Object.entries(reeksData.reeksen))
+    for (const [id, punten] of Object.entries(per))
+      for (const [t, gem, mn, mx] of punten)
+        regels.push([new Date(t).toISOString(), id, veld, ...[gem, mn, mx].map(n => String(n).replace(".", ","))].join(";"));
+  const blob = new Blob(["﻿" + regels.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `mcs-metingen-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.csv`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ============================================================ data ophalen
+function toonMelding(tekst) { const m = $("melding"); m.style.display = tekst ? "block" : "none"; m.textContent = tekst || ""; }
+
+async function ververLaatste() {
+  try {
+    const [statusRijen, laatsteRijen] = await Promise.all([
+      sbGet("device_status", "select=device_id,display_name,last_seen,online&order=device_id"),
+      sbGet("latest_readings", "select=device_id,metric,value,measured_at"),
+    ]);
+    const nieuw = {};
+    for (const d of statusRijen) {
+      if (VERBORGEN.includes(d.device_id)) continue;
+      namen[d.device_id] = d.display_name;
+      nieuw[d.device_id] = { laatst_gezien: Date.parse(d.last_seen), online: d.online, waarden: {} };
+      if (!bekendeIds.includes(d.device_id)) { bekendeIds.push(d.device_id); st.apparaten.add(d.device_id); }
+    }
+    for (const r of laatsteRijen) {
+      if (VERBORGEN.includes(r.device_id)) continue;
+      if (!nieuw[r.device_id]) nieuw[r.device_id] = { laatst_gezien: Date.parse(r.measured_at), waarden: {} };
+      nieuw[r.device_id].waarden[r.metric] = { waarde: r.value };
+    }
+    laatste = nieuw;
+    const nieuwVelden = new Set();
+    Object.values(laatste).forEach(d => Object.keys(d.waarden).forEach(v => nieuwVelden.add(v)));
+    beschikbaar = nieuwVelden;
+    tekenBediening(); tekenKaarten(); bouwGrafieken();
+    const tsLijst = Object.values(laatste).map(d => d.laatst_gezien || 0);
+    const laatsteTs = tsLijst.length ? Math.max(...tsLijst) : 0;
+    const online = Object.values(laatste).some(d => d.online);
+    $("stip").className = "stip" + (online ? " live" : "");
+    $("statustekst").textContent = laatsteTs ? "Live · laatste bericht " + geleden(laatsteTs) : "Verbonden met Supabase";
+    toonMelding("");
+  } catch (e) {
+    $("stip").className = "stip fout"; $("statustekst").textContent = "Supabase niet bereikbaar";
+    toonMelding("Kan de data niet laden. Controleer supabaseUrl en de key in config.js.");
+  }
+}
+
+async function ververReeksen() {
+  const velden = geselecteerdeVelden(), apps = geselecteerdeApparaten();
+  const tot = st.uren === "eigen" ? st.tot : Date.now();
+  const van = st.uren === "eigen" ? st.van : tot - st.uren * 3600000;
+  if (!velden.length || !apps.length) {
+    reeksData = { reeksen: {}, blok_ms: 0, van, tot }; vulGrafieken(); return;
+  }
+  const bucket = bucketMin(tot - van);
+  try {
+    const reeksen = {};
+    await Promise.all(velden.map(async veld => {
+      const rijen = await sbRpc("readings_binned", {
+        p_devices: apps,
+        p_metric: veld,
+        p_from: new Date(van).toISOString(),
+        p_to: new Date(tot).toISOString(),
+        p_bucket_minutes: bucket,
+      });
+      const per = {};
+      for (const r of rijen) (per[r.device_id] || (per[r.device_id] = [])).push([Date.parse(r.bucket), r.avg_value, r.min_value, r.max_value]);
+      for (const id in per) per[id].sort((a, b) => a[0] - b[0]);
+      reeksen[veld] = per;
+    }));
+    reeksData = { reeksen, blok_ms: bucket * 60000, van, tot };
+    vulGrafieken();
+  } catch (e) { /* volgende ronde opnieuw */ }
+}
+
+tekenBediening(); tekenKaarten(); bouwGrafieken();
+ververLaatste().then(ververReeksen);
+setInterval(ververLaatste, VERVERS_LAATSTE_S * 1000);
+setInterval(() => { if (st.uren !== "eigen") ververReeksen(); }, VERVERS_REEKSEN_S * 1000);
+</script>
 </body>
 </html>
