@@ -189,6 +189,8 @@ const VELDEN = {
   "net.gateways":      { naam: "Gateways",            eenheid: "",    dec: 0 },
 };
 const STANDAARD_VELDEN = ["temperature", "humidity", "co2"];
+// Metrics die niet als grafiek-knop getoond worden (data blijft wel bewaard).
+const VERBORGEN_VELDEN = new Set(["light", "motion", "occupancy", "net.battery_pct"]);
 const CO2_MATIG = 800, CO2_SLECHT = 1200;
 const VERLOPEN_MIN = 30;
 const VERVERS_LAATSTE_S = 15, VERVERS_REEKSEN_S = 30;
@@ -283,7 +285,8 @@ function tekenBediening() {
     </button>`).join("");
 
   const velden = Object.keys(VELDEN).filter(v => beschikbaar.has(v) || st.velden.has(v))
-    .concat([...beschikbaar].filter(v => !VELDEN[v]));
+    .concat([...beschikbaar].filter(v => !VELDEN[v]))
+    .filter(v => !VERBORGEN_VELDEN.has(v));
   $("chips-velden").innerHTML = velden.map(v => `
     <button class="chip" data-veld="${v}" aria-pressed="${st.velden.has(v)}">
       <span class="vink" style="${st.velden.has(v) ? "background:var(--tekst-2)" : ""}"></span>${veldInfo(v).naam}
