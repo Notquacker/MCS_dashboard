@@ -128,6 +128,8 @@
     .rechts { margin-left: 0; }
     /* Iets lagere grafieken = minder scrollen */
     .canvas { height: 230px; }
+    /* Offline-kaarten compacter: 'Laatste contact' weglaten, alleen de tijd */
+    .kaart .tijd .lc { display: none; }
   }
 </style>
 </head>
@@ -378,7 +380,7 @@ function tekenKaarten() {
       <div class="temp">${fmt(val("temperature"))}<small> °C</small></div>
       <div class="rij"><span>Vochtigheid</span><b>${fmt(val("humidity"), 0)} %</b></div>
       ${co2 != null ? `<div class="rij"><span>CO₂</span><span><b>${fmt(co2, 0)}</b>${co2Label(co2)}</span></div>` : ""}
-      <div class="tijd">${d ? (offline ? "Laatste contact " : "") + geleden(d.laatst_gezien) : "Nog geen data"}</div>
+      <div class="tijd">${d ? (offline ? '<span class="lc">Laatste contact </span>' : "") + geleden(d.laatst_gezien) : "Nog geen data"}</div>
     </div>`;
   }).join("");
 }
