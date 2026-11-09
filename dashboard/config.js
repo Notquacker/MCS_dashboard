@@ -16,10 +16,6 @@ window.GACS_CONFIG = {
   supabaseUrl: "https://zfrgujufjvgovjzuyltz.supabase.co",
   supabaseAnonKey: "sb_publishable_orjrrSjgGlL01oKlrKeEQQ_VNfTihRv",
 
-  // Supabase Edge Function die achtergrondbronnen via Exa ophaalt.
-  // De Exa API-key staat als Supabase-secret (EXA_API_KEY), nooit hier.
-  exaContextUrl: "https://zfrgujufjvgovjzuyltz.supabase.co/functions/v1/exa-context",
-
   // Welke metrics je in de tegels wilt zien, in deze volgorde.
   tileMetrics: ["co2", "temperature", "humidity", "light", "motion", "occupancy"],
 

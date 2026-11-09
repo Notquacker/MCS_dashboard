@@ -31,12 +31,6 @@ inserten — dedup, device-upsert en het platslaan zitten allemaal in die functi
 Dedup gaat op `uplinks.dedup_key` = de TTN correlation id (`pba:uplink:...`),
 dus opnieuw importeren is altijd veilig.
 
-**De Exa-key blijft server-side.** Het dashboard is publiek, dus de browser
-krijgt nooit een Exa-key; `exa-context` doet de call met het `EXA_API_KEY`-
-secret. Omdat het endpoint publiek is, accepteert het alleen een vaste set
-onderwerpen (`co2`, `temperature`, `humidity`, `network`) en cachet het elk
-antwoord 24 uur in `exa_context`.
-
 **`uplinks` is privé.** Die tabel bevat de volledige TTN payload, inclusief
 gateway-tokens en session key ids. Er staat bewust geen RLS select-policy op en
 `anon` heeft er geen grants op. Niet "even" openzetten voor het dashboard —
@@ -72,7 +66,6 @@ policies onderaan de initiële migratie: `anon` mag alleen `SELECT` op `devices`
 supabase/config.toml                CLI/GitHub-integratie, zet verify_jwt uit
 supabase/migrations/                tabellen, RLS, views, ingest-functies
 supabase/functions/ttn-webhook/     Deno edge function, verwacht x-webhook-token
-supabase/functions/exa-context/     Exa-zoekopdracht voor het achtergrondpaneel
 scripts/backfill.mjs                TTN console-exports inladen, geen deps
 dashboard/                          wat GitHub Pages serveert
   index.html app.js styles.css config.js

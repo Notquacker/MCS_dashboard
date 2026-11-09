@@ -9,13 +9,6 @@
 # Dit is NIET je project-ref.
 project_id = "mcs_dashboard"
 
-[functions.exa-context]
-# Het dashboard is een statische pagina op GitHub Pages en kan geen Supabase-JWT
-# meesturen. De function is dus publiek, maar voert alleen een vaste set
-# Exa-queries uit en cachet elk antwoord 24 uur in public.exa_context — één
-# betaalde call per onderwerp per dag, niet per bezoeker.
-verify_jwt = false
-
 [functions.ttn-webhook]
 # TTN kan geen Supabase-JWT meesturen. De beveiliging is de x-webhook-token
 # header die de function zelf controleert. Dit is het equivalent van de

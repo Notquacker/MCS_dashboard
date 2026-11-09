@@ -107,15 +107,6 @@
   .mini .canvas { height: 180px; }
   .leeg { color: var(--tekst-3); font-size: 13px; padding: 30px 0; text-align: center; }
 
-  /* ---- achtergrondbronnen (Exa) */
-  .bronnen { display: grid; gap: 10px; }
-  .bron { border-top: 1px solid var(--raster); padding-top: 8px; min-width: 0; }
-  .bron a { color: var(--merk); font-weight: 600; font-size: 13px; text-decoration: none; }
-  .bron a:hover { text-decoration: underline; }
-  .bron .herkomst { color: var(--tekst-3); font-size: 12px; margin-left: 6px; }
-  .bron p { margin: 4px 0 0; color: var(--tekst-2); font-size: 13px; }
-  .bron p + p { margin-top: 2px; }
-
   .melding { background: var(--vlak); border: 1px solid var(--rand); border-left: 3px solid var(--slecht);
              border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: none; color: var(--tekst-2); }
   footer { color: var(--tekst-3); font-size: 12px; margin-top: 16px; }
@@ -169,13 +160,6 @@
   </div>
 
   <div class="grafieken" id="grafieken"></div>
-
-  <section class="paneel breed" id="achtergrond" style="margin-top: 12px">
-    <h2>Achtergrond<span class="uitleg" id="ag-onderwerp" style="margin: 0"></span>
-      <button class="knop" id="ag-zoek" style="margin-left: auto">Zoek bronnen</button></h2>
-    <div class="uitleg" id="ag-status">Nog niet opgehaald.</div>
-    <div class="bronnen" id="ag-bronnen"></div>
-  </section>
 
   <footer id="voet"></footer>
 </div>
@@ -321,8 +305,6 @@ function tekenBediening() {
     <button class="chip" data-veld="${v}" aria-pressed="${st.velden.has(v)}">
       <span class="vink" style="${st.velden.has(v) ? "background:var(--tekst-2)" : ""}"></span>${veldInfo(v).naam}
     </button>`).join("");
-
-  tekenAchtergrond();
 }
 
 document.addEventListener("click", e => {
@@ -356,8 +338,6 @@ document.addEventListener("click", e => {
     window.scrollTo({ top: $("grafieken").offsetTop - 12, behavior: "smooth" });
   } else if (t.id === "csv") {
     return downloadCsv();
-  } else if (t.id === "ag-zoek") {
-    return zoekAchtergrond();
   } else return;
   bewaar(); tekenBediening(); tekenKaarten(); bouwGrafieken(); ververReeksen();
 });
@@ -554,77 +534,6 @@ function downloadCsv() {
   a.href = URL.createObjectURL(blob);
   a.download = `mcs-metingen-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.csv`;
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-// ============================================================ achtergrond (Exa)
-// De Exa API-key staat nooit in de browser. Deze pagina roept de Supabase Edge
-// Function `exa-context` aan; die doet de zoekopdracht en cachet het antwoord
-// 24 uur in de database. Welk onderwerp erbij hoort, hangt af van de meting.
-const AG_URL = (window.GACS_CONFIG || {}).exaContextUrl || "";
-const AG_ONDERWERP = { co2: "co2", temperature: "temperature", humidity: "humidity" };
-const AG_NAAM = { co2: "CO₂", temperature: "temperatuur", humidity: "luchtvochtigheid", network: "LoRaWAN-signaal" };
-const agCache = {};   // onderwerp -> antwoord van de function
-let agBezig = false;
-
-function agOnderwerp() {
-  const v = [...st.velden][0];
-  if (!v) return null;
-  if (v.startsWith("net.")) return "network";
-  return AG_ONDERWERP[v] || null;
-}
-const agStatus = tekst => { $("ag-status").textContent = tekst || ""; };
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-function domein(url) { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } }
-
-function tekenBronnen(body) {
-  const resultaten = (body.results || []).slice(0, 5);
-  $("ag-bronnen").innerHTML = resultaten.map(r => `
-    <article class="bron">
-      <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || domein(r.url))}</a>
-      <span class="herkomst">${esc(domein(r.url))}</span>
-      ${(r.highlights || []).slice(0, 2).map(h => `<p>${esc(h)}</p>`).join("")}
-    </article>`).join("");
-  const wanneer = body.fetched_at
-    ? new Date(body.fetched_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
-    : "";
-  agStatus([`${resultaten.length} bronnen`, wanneer && `opgehaald ${wanneer}`, body.cached && "uit cache"].filter(Boolean).join(" · "));
-}
-
-function tekenAchtergrond() {
-  const onderwerp = agOnderwerp();
-  $("ag-onderwerp").textContent = onderwerp ? " bij " + AG_NAAM[onderwerp] : "";
-  $("ag-zoek").style.display = onderwerp && AG_URL ? "" : "none";
-  if (agBezig) return;
-  if (!AG_URL) { agStatus("Zet exaContextUrl in config.js om bronnen te kunnen zoeken."); return; }
-  if (!onderwerp) { agStatus("Kies één meting om achtergrond bij te zoeken."); $("ag-bronnen").innerHTML = ""; return; }
-  if (agCache[onderwerp]) return tekenBronnen(agCache[onderwerp]);
-  agStatus("Nog niet opgehaald.");
-  $("ag-bronnen").innerHTML = "";
-}
-
-async function zoekAchtergrond() {
-  const onderwerp = agOnderwerp();
-  if (!onderwerp || agBezig) return;
-  if (!AG_URL) return agStatus("Zet exaContextUrl in config.js om bronnen te kunnen zoeken.");
-  if (agCache[onderwerp]) return tekenBronnen(agCache[onderwerp]);
-
-  agBezig = true;
-  agStatus("Bronnen zoeken…");
-  try {
-    const r = await fetch(AG_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ topic: onderwerp }),
-    });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(body.detail || body.error || `HTTP ${r.status}`);
-    agCache[onderwerp] = body;
-    tekenBronnen(body);
-  } catch (e) {
-    agStatus("Kon geen bronnen ophalen (" + (e.message || "netwerkfout") + ").");
-  } finally {
-    agBezig = false;
-  }
 }
 
 // ============================================================ data ophalen

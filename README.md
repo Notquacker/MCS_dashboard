@@ -222,61 +222,12 @@ naam. Wil je er een met eenheid en drempelwaarde bij? Voeg een regel toe aan
 
 ---
 
-## 6. Achtergrondbronnen met Exa (optioneel)
-
-Onder de grafieken staat een paneel **Achtergrond**. Het zoekt bij de gekozen
-meting naar bronnen over wat die waarden betekenen — CO₂-grenswaarden,
-comforttemperatuur, luchtvochtigheid, LoRaWAN-signaalsterkte — en toont titel,
-site en een paar highlights per bron.
-
-De Exa-key staat **nooit** in de browser. Het dashboard roept de Edge Function
-`exa-context` aan, die met het secret `EXA_API_KEY` bij Exa zoekt. Omdat het
-dashboard publiek is, accepteert die function alleen vier vaste onderwerpen
-(`co2`, `temperature`, `humidity`, `network`) en bewaart het antwoord 24 uur in
-de tabel `exa_context`. Eén betaalde call per onderwerp per dag, dus.
-
-Eenmalig instellen:
-
-```bash
-# 1. key lokaal (staat in .gitignore, niet committen)
-echo 'EXA_API_KEY=exa_...' > .env
-
-# 2. dezelfde key als Supabase-secret — hier leest de function hem
-supabase secrets set EXA_API_KEY=exa_...
-
-# 3. function uitrollen (of gewoon pushen: de GitHub-integratie doet het)
-supabase functions deploy exa-context --no-verify-jwt
-```
-
-Kan ook zonder CLI: Supabase dashboard → Edge Functions → Secrets, en de
-migratie uit `supabase/migrations/` in de SQL Editor.
-
-`exaContextUrl` in `dashboard/config.js` staat al op de juiste function-URL.
-
-Zelf testen (hetzelfde request dat de function stuurt):
-
-```bash
-curl -i -X POST "https://JOUW-PROJECT-REF.supabase.co/functions/v1/exa-context" \
-  -H "content-type: application/json" \
-  -d '{"topic":"co2"}'
-```
-
-Verwacht: `"cached": false` met vijf bronnen; nog eens draaien geeft
-`"cached": true`. Een onbekend onderwerp geeft `400` met de toegestane lijst.
-
-De Exa-call zelf is bewust de aanbevolen vorm: query, `objective` (dit is één
-stap in een groter geheel), `type: "auto"` en `contents: { highlights: true }`.
-Geen domeinfilters of datumfilters — de query stuurt de bronkeuze.
-
----
-
 ## Mappenstructuur
 
 ```
 supabase/config.toml                   CLI/GitHub-integratie
 supabase/migrations/                   schema, RLS, views, ingest-functies
 supabase/functions/ttn-webhook/        de Edge Function
-supabase/functions/exa-context/        achtergrondbronnen via Exa
 scripts/backfill.mjs                   oude exports inladen
 dashboard/                             wat op GitHub Pages komt
   index.html  app.js  styles.css  config.js
@@ -295,8 +246,6 @@ data/                                  jouw TTN exports (niet gecommit)
 | Dashboard leeg, geen fout | database is leeg — draai de backfill of wacht op een uplink |
 | `permission denied for table readings` | migratie niet (helemaal) toegepast; de grants staan onderaan |
 | Status blijft "polling" | Realtime staat uit; zet in Supabase Studio Realtime aan voor `readings` |
-| Achtergrond: "Kon geen bronnen ophalen" | `exa-context` is niet uitgerold, of `EXA_API_KEY` staat niet als Supabase-secret |
-| Achtergrond: `500 server not configured` | `EXA_API_KEY` ontbreekt in de secrets van het project |
 
 ## Getest
 
