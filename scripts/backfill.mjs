@@ -105,6 +105,10 @@ function toApplicationUp(event) {
     if (event.name !== "as.up.data.forward") return null;
     return event.data?.uplink_message ? event.data : null;
   }
+  // Storage Integration API (event-stream): { result: { ...ApplicationUp } }
+  if (event?.result?.uplink_message && event?.result?.end_device_ids) {
+    return event.result;
+  }
   // Rechtstreekse webhook-body of MQTT-bericht.
   if (event?.uplink_message && event?.end_device_ids) return event;
   return null;
