@@ -69,7 +69,9 @@
   .rechts { margin-left: auto; display: inline-flex; gap: 8px; }
 
   /* ---- kaarten */
-  .kaarten { display: grid; gap: 10px; margin-bottom: 16px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .kaarten { display: grid; gap: 10px; margin-bottom: 16px; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); }
+  .kaart-kop { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+  .kaart-kop .label { flex: none; margin-left: 0; }
   .kaart { background: var(--vlak); border: 1px solid var(--rand); border-radius: 12px; padding: 12px 12px 10px; cursor: pointer; text-align: left; }
   .kaart:hover { border-color: var(--as); }
   .kaart.uit { opacity: .45; }
@@ -191,6 +193,8 @@ const VELDEN = {
 const STANDAARD_VELDEN = ["temperature", "humidity", "co2"];
 // Metrics die niet als grafiek-knop getoond worden (data blijft wel bewaard).
 const VERBORGEN_VELDEN = new Set(["light", "motion", "occupancy", "net.battery_pct", "vdd"]);
+// Metrics die de detailweergave (klik op een sensorkaart) naast elkaar toont.
+const KLIMAAT = ["temperature", "humidity", "co2"];
 const CO2_MATIG = 800, CO2_SLECHT = 1200;
 const VERLOPEN_MIN = 30;
 const VERVERS_LAATSTE_S = 15, VERVERS_REEKSEN_S = 30;
@@ -261,7 +265,8 @@ const opgeslagen = (() => { try { return JSON.parse(localStorage.getItem("mcs-da
 const st = {
   uren: opgeslagen.uren ?? 24,             // getal of "eigen"
   van: opgeslagen.van ?? null, tot: opgeslagen.tot ?? null,
-  weergave: "meting",                      // altijd één gecombineerde grafiek
+  weergave: "meting",                      // "meting" = overzicht; "apparaat" = één sensor in detail
+  focus: null,                             // welke sensor in detail staat (na klik op een kaart)
   apparaten: new Set((opgeslagen.apparaten || APPARATEN.map(a => a.id)).filter(id => !VERBORGEN.includes(id))),
   // Eén metric tegelijk in de grafiek; knoppen wisselen 'm, zoals de eerste versie.
   velden: new Set([(opgeslagen.velden && opgeslagen.velden[0]) || (window.GACS_CONFIG || {}).defaultMetric || "co2"]),
@@ -306,18 +311,21 @@ document.addEventListener("click", e => {
     const v = new Date($("van").value).getTime(), w = new Date($("tot").value).getTime();
     if (!(v < w)) { $("van").focus(); return; }
     st.van = v; st.tot = w;
+  } else if (t.id === "terug") {
+    st.weergave = "meting"; st.focus = null;
   } else if (t.dataset.apparaat) {
     const id = t.dataset.apparaat; st.apparaten.has(id) ? st.apparaten.delete(id) : st.apparaten.add(id);
+    st.weergave = "meting"; st.focus = null;
   } else if (t.dataset.veld) {
-    // Eén metric tegelijk in de gecombineerde grafiek
-    st.velden = new Set([t.dataset.veld]);
+    // Eén metric: terug naar het gecombineerde overzicht
+    st.velden = new Set([t.dataset.veld]); st.weergave = "meting"; st.focus = null;
   } else if (t.dataset.alles === "apparaten") {
-    st.apparaten = new Set(bekendeIds);
+    st.apparaten = new Set(bekendeIds); st.weergave = "meting"; st.focus = null;
   } else if (t.dataset.geen === "apparaten") {
-    st.apparaten.clear();
+    st.apparaten.clear(); st.weergave = "meting"; st.focus = null;
   } else if (t.classList.contains("kaart")) {
-    // Klik op een kaart: toon alleen deze sensor in de grafiek
-    st.apparaten = new Set([t.dataset.id]);
+    // Klik op een kaart: temperatuur, vocht en CO₂ van deze sensor naast elkaar
+    st.weergave = "apparaat"; st.focus = t.dataset.id;
     window.scrollTo({ top: $("grafieken").offsetTop - 12, behavior: "smooth" });
   } else if (t.id === "csv") {
     return downloadCsv();
@@ -336,8 +344,8 @@ function tekenKaarten() {
     const val = k => w[k] ? w[k].waarde : null;
     const offline = !d || d.online === false;
     const co2 = val("co2");
-    return `<div class="kaart${offline ? " oud" : ""}${st.apparaten.has(id) ? "" : " uit"}" data-id="${id}" title="Klik: alleen deze sensor in de grafiek">
-      <div class="naam"><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}${d ? statusLabel(!offline) : ""}</div>
+    return `<div class="kaart${offline ? " oud" : ""}${st.apparaten.has(id) ? "" : " uit"}" data-id="${id}" title="Klik: temperatuur, vocht en CO₂ van deze sensor">
+      <div class="kaart-kop"><div class="naam"><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}</div>${d ? statusLabel(!offline) : ""}</div>
       <div class="soort">${a.soort}</div>
       <div class="temp">${fmt(val("temperature"))}<small> °C</small></div>
       <div class="rij"><span>Vochtigheid</span><b>${fmt(val("humidity"), 0)} %</b></div>
@@ -427,44 +435,40 @@ function geselecteerdeApparaten() { return bekendeIds.filter(id => st.apparaten.
 function veldenVan(id) { return new Set(Object.keys((laatste[id] || {}).waarden || {})); }
 
 function bouwGrafieken() {
-  const velden = geselecteerdeVelden(), apps = geselecteerdeApparaten();
-  const sleutel = JSON.stringify([st.weergave, velden, apps, apps.map(id => [...veldenVan(id)].sort())]);
+  const sensorModus = st.weergave === "apparaat" && st.focus;
+  const velden = sensorModus ? KLIMAAT.filter(v => veldenVan(st.focus).has(v)) : geselecteerdeVelden();
+  const apps = sensorModus ? [st.focus] : geselecteerdeApparaten();
+  const sleutel = JSON.stringify([st.weergave, st.focus, velden, apps]);
   if (sleutel === indelingSleutel) return;
   indelingSleutel = sleutel;
   Object.values(grafieken).forEach(g => g.destroy());
   grafieken = {};
   const doel = $("grafieken");
 
-  if (!velden.length || !apps.length) {
-    doel.innerHTML = `<div class="paneel breed"><div class="leeg">Kies minstens één apparaat en één meting.</div></div>`;
-    return;
-  }
-
-  if (st.weergave === "meting") {
-    doel.innerHTML = velden.map(v => {
-      const i = veldInfo(v);
-      return `<section class="paneel${velden.length === 1 ? " breed" : ""}">
-        <h2>${i.naam}</h2>
-        <div class="uitleg">${[i.eenheid, i.uitleg].filter(Boolean).join(" · ") || "&nbsp;"}</div>
-        <div class="canvas"><canvas data-sleutel="${v}|*"></canvas></div>
-      </section>`;
-    }).join("");
+  if (sensorModus) {
+    // Detail: temperatuur, vocht en CO₂ van één sensor naast elkaar.
+    const id = st.focus, a = info(id);
+    doel.innerHTML = `<section class="paneel breed">
+      <h2><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}
+          <button class="link" id="terug" style="margin-left:auto">&larr; alle sensoren</button></h2>
+      <div class="uitleg">${a.soort}${laatste[id] ? " · laatste bericht " + geleden(laatste[id].laatst_gezien) : " · nog geen data"}</div>
+      ${velden.length ? `<div class="mini-raster">${velden.map(v => `
+        <div class="mini">
+          <h3>${veldInfo(v).naam}<span data-nu="${id}|${v}"></span></h3>
+          <div class="canvas"><canvas data-sleutel="${v}|${id}"></canvas></div>
+        </div>`).join("")}</div>`
+      : `<div class="leeg">Deze sensor meet geen temperatuur, vocht of CO₂.</div>`}
+    </section>`;
+  } else if (!velden.length || !apps.length) {
+    doel.innerHTML = `<div class="paneel breed"><div class="leeg">Kies minstens één sensor en één meting.</div></div>`;
   } else {
-    doel.innerHTML = apps.map(id => {
-      const heeft = veldenVan(id);
-      const vs = velden.filter(v => heeft.has(v) || !laatste[id]);
-      const a = info(id);
-      return `<section class="paneel breed">
-        <h2><span class="kleur" style="background:${kleur(id)}"></span>${a.naam}</h2>
-        <div class="uitleg">${a.soort}${laatste[id] ? " · laatste bericht " + geleden(laatste[id].laatst_gezien) : " · nog geen data"}</div>
-        ${vs.length ? `<div class="mini-raster">${vs.map(v => `
-          <div class="mini">
-            <h3>${veldInfo(v).naam}<span data-nu="${id}|${v}"></span></h3>
-            <div class="canvas"><canvas data-sleutel="${v}|${id}"></canvas></div>
-          </div>`).join("")}</div>`
-        : `<div class="leeg">Dit apparaat meet geen van de gekozen metingen.</div>`}
-      </section>`;
-    }).join("");
+    // Overzicht: één gecombineerde grafiek met alle gekozen sensoren.
+    const v = velden[0], i = veldInfo(v);
+    doel.innerHTML = `<section class="paneel breed">
+      <h2>${i.naam}</h2>
+      <div class="uitleg">${[i.eenheid, i.uitleg].filter(Boolean).join(" · ") || "&nbsp;"}</div>
+      <div class="canvas"><canvas data-sleutel="${v}|*"></canvas></div>
+    </section>`;
   }
   doel.querySelectorAll("canvas[data-sleutel]").forEach(c => {
     const [veld, app] = c.dataset.sleutel.split("|");
@@ -562,7 +566,9 @@ async function ververLaatste() {
 }
 
 async function ververReeksen() {
-  const velden = geselecteerdeVelden(), apps = geselecteerdeApparaten();
+  const sensorModus = st.weergave === "apparaat" && st.focus;
+  const velden = sensorModus ? KLIMAAT.filter(v => veldenVan(st.focus).has(v)) : geselecteerdeVelden();
+  const apps = sensorModus ? [st.focus] : geselecteerdeApparaten();
   const tot = st.uren === "eigen" ? st.tot : Date.now();
   const van = st.uren === "eigen" ? st.van : tot - st.uren * 3600000;
   if (!velden.length || !apps.length) {
