@@ -426,7 +426,13 @@ function maakGrafiek(canvas, veld, metLegenda) {
       },
       plugins: {
         legend: { display: metLegenda, position: "top", align: "start",
-                  labels: { color: css("--tekst-2"), boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
+                  labels: { color: css("--tekst-2"), usePointStyle: true, boxWidth: 8, boxHeight: 8,
+                    // Buiten krijgt een rond stipje, de binnensensoren een vierkant.
+                    generateLabels(chart) {
+                      const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                      for (const it of items) it.pointStyle = chart.data.datasets[it.datasetIndex].buiten ? "circle" : "rect";
+                      return items;
+                    } } },
         tooltip: {
           backgroundColor: css("--vlak"), titleColor: css("--tekst-1"), bodyColor: css("--tekst-2"),
           borderColor: css("--rand"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
@@ -495,6 +501,7 @@ function dataset(id, punten, blokMs) {
   });
   return {
     label: info(id).naam, data, borderColor: k, backgroundColor: k,
+    buiten: info(id).buiten,   // vlag voor de legenda (rond stipje i.p.v. vierkant)
     borderDash: info(id).buiten ? [5, 4] : [], spanGaps: false,
     pointRadius: punten.length < 20 ? 3.5 : 0, pointBorderColor: css("--vlak"), pointBorderWidth: 1.5
   };
